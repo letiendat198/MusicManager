@@ -2,3 +2,4 @@
 .cache
 venv
 src/downloaded
+__pycache__
