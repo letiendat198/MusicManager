@@ -14,12 +14,14 @@ TODO
 
 ## TODO
 - Add Batch download Youtube
+- Allow user to specify download path
 - Change to id based storage
 - Fetch album data from Spotify and show it
 - Allow to add a Spotify playlist
 - Allow to add a Youtube video
 - Create a DataHandler to handle all those playlist and stuffs
 - Refresh yt-title when yt-url is changed
+- Add a settings menu
 - Add icon to specify music source
 - Change popups to actually look decent
 - Sort in playlist order
