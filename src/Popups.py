@@ -94,6 +94,7 @@ class BatchGetYtUrlPopup(QWidget):
         self.setWindowTitle("Getting Youtube URLs")
 
         self.view = QVBoxLayout()
+        self.view.setAlignment(Qt.AlignCenter)
 
         self.label = QLabel("Got {success} urls\nFailed: {fail}".format(success=self.success_count, fail=self.error_count))
         self.view.addWidget(self.label)
@@ -123,15 +124,8 @@ class BatchGetYtUrlPopup(QWidget):
         link = res[1]
         title = res[2]
         tracks = json.loads(self.f.read())
-        obj = {
-            name: {
-                "artist": tracks[name]["artist"],
-                "id": tracks[name]["id"],
-                "yt-url": link,
-                "yt-title": title
-            }
-        }
-        tracks.update(obj)
+        tracks[name]["yt-url"] = link
+        tracks[name]["yt-title"] = title
         js = json.dumps(tracks)
         self.f.overwrite(js)
         self.on_update()
@@ -178,15 +172,8 @@ class GetYtUrlPopup(QWidget):
         link = res[1]
         title = res[2]
         tracks = json.loads(f.read())
-        obj = {
-            name: {
-                "artist": tracks[name]["artist"],
-                "id": tracks[name]["id"],
-                "yt-url": link,
-                "yt-title": title
-            }
-        }
-        tracks.update(obj)
+        tracks[name]["yt-url"] = link
+        tracks[name]["yt-title"] = title
         js = json.dumps(tracks)
         f.overwrite(js)
         self.loading_popup.close()
@@ -200,14 +187,16 @@ class GetYtUrlPopup(QWidget):
 
 
 class DownloadYtPopup(QWidget):
-    def __init__(self, url, name, threadpool):
+    def __init__(self, url, name, path, callback, threadpool):
         super(DownloadYtPopup, self).__init__()
 
-        self.setFixedWidth(500)
+        self.setFixedWidth(400)
 
         self.threadpool = threadpool
         self.url = url
         self.name = name
+        self.path = path
+        self.fn = callback
 
         self.setWindowTitle("Downloading music")
 
@@ -224,16 +213,22 @@ class DownloadYtPopup(QWidget):
 
     def start_task(self):
         if self.url != "":
-            self.worker = Worker(YoutubeHandler.download, self.url, self.name)
-            self.worker.signal.finished.connect(self.on_finish)
+            self.worker = Worker(YoutubeHandler.download, self.url, self.name, self.path)
+            self.worker.signal.result.connect(self.on_result)
             self.worker.signal.error.connect(self.on_error)
             self.threadpool.start(self.worker)
         else:
             self.fail_popup.show()
             self.close()
 
-    def on_finish(self):
+    def on_result(self, name):
+        f = FileHelper("liked.json")
+        tracks = json.loads(f.read())
+        tracks[name]["downloaded"] = 1
+        js = json.dumps(tracks)
+        f.overwrite(js)
         self.success_popup.show()
+        self.fn()
         self.close()
 
     def on_error(self, trace):
@@ -241,6 +236,130 @@ class DownloadYtPopup(QWidget):
         self.error_popup.show()
         self.close()
 
+
+class BatchDownloadYtPopup(QWidget):
+    def __init__(self, path, threadpool):
+        super(BatchDownloadYtPopup, self).__init__()
+
+        self.setFixedWidth(400)
+
+        self.threadpool = threadpool
+        self.path = path
+
+        self.setWindowTitle("Downloading...")
+
+        self.view = QVBoxLayout()
+
+        self.count = 0
+        self.error = 0
+        self.total = 0
+
+        self.label = QLabel("Successfully downloaded {success}/{total} \nFailed: {error}".format(success=self.count,total=self.total,error=self.error))
+        self.view.addWidget(self.label)
+
+        self.setLayout(self.view)
+
+        self.process_entries()
+
+    def process_entries(self):
+        f = FileHelper("liked.json")
+        tracks = json.loads(f.read())
+        for track in tracks:
+            if "yt-url" in tracks[track]:
+                self.total += 1
+                self.start_task(tracks[track]["yt-url"], track)
+
+    def start_task(self, url, name):
+        self.worker = Worker(YoutubeHandler.download, url, name, self.path)
+        self.worker.signal.result.connect(self.on_result)
+        self.worker.signal.error.connect(self.on_error)
+        self.threadpool.start(self.worker)
+
+    def on_result(self, name):
+        self.count += 1
+        f = FileHelper("liked.json")
+        tracks = json.loads(f.read())
+        tracks[name]["downloaded"] = 1
+        js = json.dumps(tracks)
+        f.overwrite(js)
+        self.on_progress()
+
+    def on_error(self, trace):
+        self.error += 1
+        self.on_progress()
+
+    def on_progress(self):
+        self.label.setText("Successfully downloaded {success}/{total} \nFailed: {error}".format(success=self.count,total=self.total,error=self.error))
+
+
+class YtTitleRefreshPopup:
+    def __init__(self, name, url, callback, threadpool):
+        self.name = name
+        self.url = url
+        self.fn = callback
+        self.threadpool = threadpool
+
+        self.worker = Worker(YoutubeHandler.get_info, self.name, self.url)
+        self.worker.signal.result.connect(self.on_result)
+        self.worker.signal.error.connect(self.on_error)
+        self.threadpool.start(self.worker)
+
+    def on_result(self, res):
+        name = res[0]
+        id = res[1]
+        title = res[2]
+
+        f = FileHelper("liked.json")
+        tracks = json.loads(f.read())
+        tracks[name]["yt-title"] = title
+        tracks[name]["yt-url"] = self.url
+        js = json.dumps(tracks)
+        f.overwrite(js)
+        self.fn(name)
+
+    def on_error(self, trace):
+        self.error_popup = GenericConfirmPopup("Error", str(trace), print)
+        self.error_popup.show()
+
+
+class GenericPathChooser(QWidget):
+    def __init__(self, title, label, fn, *args, **kwargs):
+        super(GenericPathChooser, self).__init__()
+
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+
+        self.setWindowTitle(title)
+
+        self.view = QFormLayout()
+
+        self.but_row = QHBoxLayout()
+        self.path_edit = QLineEdit()
+        self.choose_path_but = QPushButton("...")
+        self.but_row.addWidget(self.path_edit)
+        self.but_row.addWidget(self.choose_path_but)
+        self.view.addRow(label, self.but_row)
+
+        self.confirm_but = QPushButton("Confirm")
+        self.view.addWidget(self.confirm_but)
+
+        self.setLayout(self.view)
+
+        self.choose_path_but.clicked.connect(self.on_path_click)
+        self.confirm_but.clicked.connect(self.on_confirm)
+
+    def on_path_click(self):
+        self.path = QFileDialog.getExistingDirectory(self, "Select a folder")
+        if self.path:
+            self.path_edit.setText(self.path)
+            self.path_edit.setCursorPosition(0)
+
+    def on_confirm(self):
+        self.kwargs["path"] = self.path_edit.text()
+        self.popup = self.fn(*self.args, **self.kwargs)
+        self.popup.show()
+        self.close()
 
 class GenericConfirmPopup(QWidget):
     def __init__(self, title, label, fn, *args, **kwargs):
@@ -253,6 +372,7 @@ class GenericConfirmPopup(QWidget):
         self.setWindowTitle(title)
 
         self.view = QVBoxLayout()
+        self.view.setAlignment(Qt.AlignCenter)
 
         self.label = QLabel(label)
         self.view.addWidget(self.label)
@@ -275,6 +395,7 @@ class GenericTextPopup(QWidget):
         self.setWindowTitle(title)
 
         self.view = QVBoxLayout()
+        self.view.setAlignment(Qt.AlignCenter)
 
         self.label = QLabel(label)
         self.view.addWidget(self.label)

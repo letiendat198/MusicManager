@@ -1,3 +1,4 @@
+import os
 import yt_dlp as youtube_dl
 import urllib.request
 from selenium import webdriver
@@ -23,11 +24,11 @@ def get_url(name, search_query, progress_callback):
     return name, link, title
 
 
-def download(url, name, progress_callback):
+def download(url, name, path, progress_callback):
     options = {
         'format': 'bestaudio/best',
         'noplaylist': 'True',
-        'outtmpl': "downloaded/"+name+".%(ext)s",
+        'outtmpl': os.path.join(path, name.replace("/", " "))+".%(ext)s",
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
@@ -36,9 +37,10 @@ def download(url, name, progress_callback):
     }
     with youtube_dl.YoutubeDL(options) as ydl:
         ydl.download(url)
+    return name
 
 
-def get_info(url, progress_callback):
+def get_info(name, url, progress_callback):
     options = {
         'format': 'bestaudio/best',
         'noplaylist': 'True',
@@ -54,4 +56,4 @@ def get_info(url, progress_callback):
         id = info.get("id", None)
         title = info.get("title", None)
 
-    return id, title
+    return name, id, title

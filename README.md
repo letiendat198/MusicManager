@@ -13,19 +13,24 @@ Download from [release](https://github.com/letiendat198/MediaManager/releases) (
 TODO
 
 ## TODO
-- Add Batch download Youtube
-- Allow user to specify download path
+- ~~Add Batch download Youtube~~
+- ~~Allow user to specify download path~~
 - Change to id based storage
+- Create a DataHandler to handle all those playlist and stuffs
 - Fetch album data from Spotify and show it
 - Allow to add a Spotify playlist
-- Allow to add a Youtube video
-- Create a DataHandler to handle all those playlist and stuffs
-- Refresh yt-title when yt-url is changed
+- Allow to add a Youtube video and playlist
+- ~~Refresh yt-title when yt-url is changed~~
 - Add a settings menu
 - Add icon to specify music source
 - Change popups to actually look decent
-- Sort in playlist order
+- Sort in playlist order?
+- Batch get url skip songs that already have url
+- Make progress bar
+- Store mp3 path info of songs 
+- Auto change mp3 metadata with supplied info
 
 ## Issues tracker
 - A lot of crash cause no handling yet
+- Sometimes batch operations will fail with no apparent cause
 - Will add when remember

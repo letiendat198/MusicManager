@@ -47,8 +47,9 @@ class MainWindow(QMainWindow):
     def connect_stuffs(self, name):
         self.info_editing_panel.populate(name)
         self.info_editing_panel.delete_connect(self.update_tracks)
-        self.info_editing_panel.download_connect(self.threadpool)
+        self.info_editing_panel.download_connect(self.update_tracks, self.threadpool)
         self.info_editing_panel.search_connect(self.threadpool)
+        self.info_editing_panel.refresh_connect(self.threadpool)
 
 
 class SideMediaList(QScrollArea):
@@ -83,9 +84,12 @@ class SideMediaList(QScrollArea):
             self.default_label.hide()
             tracks = json.loads(f.read())
             for track in tracks:
-                self.media_button_list.append(MediaTitleButton(track))
-                self.view.addWidget(self.media_button_list[len(self.media_button_list)-1])
-                self.media_button_group.addButton(self.media_button_list[len(self.media_button_list)-1])
+                media_button = MediaTitleButton(track)
+                if "downloaded" in tracks[track]:
+                    media_button.set_downloaded()
+                self.media_button_list.append(media_button)
+                self.view.addWidget(self.media_button_list[len(self.media_button_list) - 1])
+                self.media_button_group.addButton(self.media_button_list[len(self.media_button_list) - 1])
 
 
 class InfoEditingPanel(QScrollArea):
@@ -128,8 +132,12 @@ class InfoEditingPanel(QScrollArea):
         self.yt_link_row.addWidget(self.yt_search_but)
         self.view.addRow("Youtube Link", self.yt_link_row)
 
+        self.title_row = QHBoxLayout()
         self.yt_title = QLabel()
-        self.view.addRow("Youtube Video Title", self.yt_title)
+        self.yt_title_refresh = QPushButton("Refresh")
+        self.title_row.addWidget(self.yt_title)
+        self.title_row.addWidget(self.yt_title_refresh)
+        self.view.addRow("Youtube Video Title", self.title_row)
 
         self.button_row = QHBoxLayout()
         self.save_but = QPushButton("Save")
@@ -166,33 +174,28 @@ class InfoEditingPanel(QScrollArea):
     def delete_connect(self, fn):
         self.delete_but.clicked.connect(lambda: self.on_delete_click(fn))
 
-    def download_connect(self, threadpool):
-        self.download_but.clicked.connect(lambda: self.on_download_click(threadpool))
+    def download_connect(self, fn, threadpool):
+        self.download_but.clicked.connect(lambda: self.on_download_click(fn, threadpool))
 
     def search_connect(self, threadpool):
         self.yt_search_but.clicked.connect(lambda: self.on_search_click(self.populate, threadpool))
 
+    def refresh_connect(self, threadpool):
+        self.yt_title_refresh.clicked.connect(lambda: self.on_refresh_click(self.populate, threadpool))
+
     def on_save_click(self):
         f = FileHelper("liked.json")
         tracks = json.loads(f.read())
-        for track in tracks:
-            if track == self.name:
-                obj = {
-                    self.name: {
-                        "artist": self.artist_edit.text(),
-                        "id": tracks[self.name]["id"],
-                        "yt-url": self.yt_link_edit.text(),
-                        "yt-title": self.yt_title.text()
-                    }
-                }
-                tracks.update(obj)
+        tracks[self.name]["artist"] = self.artist_edit.text()
+        tracks[self.name]["yt-url"] = self.yt_link_edit.text()
+        tracks[self.name]["yt-title"] = self.yt_title.text()
         js = json.dumps(tracks)
         f.overwrite(js)
 
     def on_delete_click(self, update_callback):
         f = FileHelper("liked.json")
         tracks = json.loads(f.read())
-        for track in tracks:
+        for track in tracks:  # Don't shorten these, they will break somehow
             if track == self.name:
                 tracks.pop(self.name)
                 break
@@ -200,13 +203,18 @@ class InfoEditingPanel(QScrollArea):
         f.overwrite(js)
         update_callback()
 
-    def on_download_click(self, threadpool):
-        self.download_popup = DownloadYtPopup(self.yt_link_edit.text(), self.name, threadpool)
-        self.download_popup.show()
+    def on_download_click(self, fn, threadpool):
+        self.path_chooser = GenericPathChooser("Choose a folder to save", "Save path", DownloadYtPopup,
+                                               self.yt_link_edit.text(), self.name, callback=fn, threadpool=threadpool)
+        self.path_chooser.show()
 
     def on_search_click(self, fn, threadpool):
         self.search_popup = GetYtUrlPopup(self.name, fn, threadpool)
         self.search_popup.show()
+
+    def on_refresh_click(self, callback, threadpool):
+        self.yt_title.setText("")
+        self.refresh_popup = YtTitleRefreshPopup(self.name, self.yt_link_edit.text(), callback, threadpool)
 
 
 class MenuBar(QMenuBar):
@@ -221,23 +229,34 @@ class MenuBar(QMenuBar):
         importMenu.addAction(self.action_import_spotify)
         self.addMenu(fileMenu)
 
-        editMenu = QMenu("Edit", self)
-        self.action_get_yt_link = QAction("Batch: Get Youtube Urls", editMenu)
-        editMenu.addAction(self.action_get_yt_link)
+        editMenu = QMenu("Action", self)
+        self.action_refresh = QAction("Refresh", editMenu)
+        editMenu.addAction(self.action_refresh)
+        self.action_batch_get_yt_link = QAction("Batch: Get Youtube Urls", editMenu)
+        editMenu.addAction(self.action_batch_get_yt_link)
+        self.action_batch_download_yt = QAction("Batch: Download from Youtube", editMenu)
+        editMenu.addAction(self.action_batch_download_yt)
         self.addMenu(editMenu)
 
     def connect_actions(self, fn, threadpool):
         # self.action_import_json.triggered.connect()
         self.action_import_spotify.triggered.connect(lambda: self.open_import_spotify_popup(fn, threadpool))
-        self.action_get_yt_link.triggered.connect(lambda : self.open_get_yt_url_popup(threadpool))
+        self.action_batch_get_yt_link.triggered.connect(lambda: self.open_batch_get_yt_url_popup(threadpool))
+        self.action_batch_download_yt.triggered.connect(lambda: self.open_batch_download_yt_popup(threadpool))
+        self.action_refresh.triggered.connect(fn)
 
     def open_import_spotify_popup(self, fn, threadpool):
         self.import_spotify_popup = ImportSpotifyPopup(fn, threadpool)
         self.import_spotify_popup.show()
 
-    def open_get_yt_url_popup(self, threadpool):
-        self.get_yt_url_popup = BatchGetYtUrlPopup(threadpool)
-        self.get_yt_url_popup.show()
+    def open_batch_get_yt_url_popup(self, threadpool):
+        self.batch_get_yt_url_popup = BatchGetYtUrlPopup(threadpool)
+        self.batch_get_yt_url_popup.show()
+
+    def open_batch_download_yt_popup(self, threadpool):
+        self.batch_download_yt = GenericPathChooser("Choose a folder to save", "Save path", BatchDownloadYtPopup,
+                                                    threadpool=threadpool)
+        self.batch_download_yt.show()
 
 
 class MediaTitleButton(QPushButton):
@@ -245,11 +264,16 @@ class MediaTitleButton(QPushButton):
         super(MediaTitleButton, self).__init__()
 
         self.name = label
-        self.setFlat(True)
         self.setText(label)
-        self.setStyleSheet("QPushButton { text-align: left; }")
+        self.setStyleSheet("QPushButton { text-align: left; border: 0px; font-size: 15px; padding: 5px} "
+                           "QPushButton:checked { text-align: left; border: 0px; font-size: 15px; padding: 5px; "
+                           "background-color:lightblue}")
         self.setCheckable(True)
 
+    def set_downloaded(self):
+        self.setStyleSheet("QPushButton { text-align: left; border: 0px; font-size: 15px; padding: 5px; background-color:lightgreen} "
+                           "QPushButton:checked { text-align: left; border: 0px; font-size: 15px; padding: 5px; "
+                           "background-color:limegreen}")
     def connect(self, fn):
         self.clicked.connect(lambda: fn(self.name))
 
