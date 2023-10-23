@@ -1,5 +1,6 @@
 import sys
 import json
+import os
 import YoutubeHandler
 
 from PyQt5.QtGui import *
@@ -80,6 +81,76 @@ class ImportSpotifyPopup(QWidget):
         self.success_popup.show()
         self.loading_popup.close()
 
+class AddSpotifyPlaylistPopup(QWidget):
+    def __init__(self, callback_fn, threadpool):
+        super(AddSpotifyPlaylistPopup, self).__init__()
+
+        self.threadpool = threadpool
+
+        self.setWindowTitle("Import from Spotify")
+        self.setFixedWidth(350)
+
+        self.view = QFormLayout()
+
+        self.id_input = QLineEdit()
+        self.secret_input = QLineEdit()
+        self.playlist_id = QLineEdit()
+        self.view.addRow("Client ID", self.id_input)
+        self.view.addRow("Client Secret", self.secret_input)
+        self.view.addRow("Playlist ID", self.playlist_id)
+
+        self.submit = QPushButton("Submit")
+        self.submit.clicked.connect(self.on_click)
+        self.view.addRow(self.submit)
+
+        self.f = FileHelper("secrets.json")
+        if self.f.exists():
+            self.cache = json.loads(self.f.read())
+            self.id_input.setText(self.cache["client_id"])
+            self.secret_input.setText(self.cache["client_secret"])
+
+        self.setLayout(self.view)
+
+        self.callback_fn = callback_fn
+
+    def on_click(self):
+        self.loading_popup = GenericTextPopup("Working", "Working on it")
+        self.loading_popup.show()
+        if not self.f.exists():
+            js = {
+                "client_id": self.id_input.text(),
+                "client_secret": self.secret_input.text()
+            }
+            self.f.write(json.dumps(js))
+        elif self.id_input.text() != self.cache["client_id"] or self.secret_input.text() != self.cache["client_secret"]:
+            js = {
+                "client_id": self.id_input.text(),
+                "client_secret": self.secret_input.text()
+            }
+            self.f.overwrite(json.dumps(js))
+
+        self.spotify_handler = SpotifyHandler(self.id_input.text(), self.secret_input.text())
+
+        self.worker = Worker(self.spotify_handler.get_playlist_track, self.playlist_id.text())
+        self.worker.signal.finished.connect(self.on_finish)
+        self.worker.signal.progress.connect(self.on_progress)
+        self.worker.signal.error.connect(self.on_error)
+        self.threadpool.start(self.worker)
+        self.close()
+
+    def on_progress(self, progress):
+        self.loading_popup.set_text("Found " + str(progress) + " songs")
+
+    def on_finish(self):
+        self.success_popup = GenericConfirmPopup("Success", "Successfully get liked tracks from Spotify",
+                                                 self.callback_fn)
+        self.success_popup.show()
+        self.loading_popup.close()
+
+    def on_error(self, trace):
+        self.success_popup = GenericConfirmPopup("Error", str(trace), self.callback_fn)
+        self.success_popup.show()
+        self.loading_popup.close()
 
 class BatchGetYtUrlPopup(QWidget):
     def __init__(self, threadpool):
@@ -104,13 +175,13 @@ class BatchGetYtUrlPopup(QWidget):
         self.process_entries()
 
     def process_entries(self):
-        self.f = FileHelper("liked.json")
+        self.f = FileHelper("data.json")
         tracks = json.loads(self.f.read())
         for track in tracks:
-            self.get_url_for_entry(track, tracks[track]["artist"])
+            self.get_url_for_entry(track, tracks[track]["name"], tracks[track]["artist"])
 
-    def get_url_for_entry(self, name, artist):
-        self.worker = Worker(YoutubeHandler.get_url, name, name + " " + artist + " lyrics")
+    def get_url_for_entry(self, id, name, artist):
+        self.worker = Worker(YoutubeHandler.get_url, id, name + " " + artist + " lyrics")
         self.worker.signal.result.connect(self.on_result)
         self.worker.signal.error.connect(self.on_error)
         self.threadpool.start(self.worker)
@@ -120,12 +191,12 @@ class BatchGetYtUrlPopup(QWidget):
 
     def on_result(self, res):
         self.success_count += 1
-        name = res[0]
+        id = res[0]
         link = res[1]
         title = res[2]
         tracks = json.loads(self.f.read())
-        tracks[name]["yt-url"] = link
-        tracks[name]["yt-title"] = title
+        tracks[id]["yt-url"] = link
+        tracks[id]["yt-title"] = title
         js = json.dumps(tracks)
         self.f.overwrite(js)
         self.on_update()
@@ -136,12 +207,12 @@ class BatchGetYtUrlPopup(QWidget):
 
 
 class GetYtUrlPopup(QWidget):
-    def __init__(self, name, fn, threadpool):
+    def __init__(self, id, name, fn, threadpool):
         super(GetYtUrlPopup, self).__init__()
 
         self.fn = fn
         self.threadpool = threadpool
-        self.name = name
+        self.id = id
 
         self.setWindowTitle("Search for Youtube URL")
 
@@ -160,24 +231,24 @@ class GetYtUrlPopup(QWidget):
 
     def on_click(self):
         self.loading_popup.show()
-        self.worker = Worker(YoutubeHandler.get_url, self.name, self.keyword.text())
+        self.worker = Worker(YoutubeHandler.get_url, self.id, self.keyword.text())
         self.worker.signal.result.connect(self.on_result)
         self.worker.signal.error.connect(self.on_error)
         self.threadpool.start(self.worker)
         self.close()
 
     def on_result(self, res):
-        f = FileHelper("liked.json")
-        name = res[0]
+        f = FileHelper("data.json")
+        id = res[0]
         link = res[1]
         title = res[2]
         tracks = json.loads(f.read())
-        tracks[name]["yt-url"] = link
-        tracks[name]["yt-title"] = title
+        tracks[id]["yt-url"] = link
+        tracks[id]["yt-title"] = title
         js = json.dumps(tracks)
         f.overwrite(js)
         self.loading_popup.close()
-        self.success_popup = GenericConfirmPopup("Success", "URL found", self.fn, self.name)
+        self.success_popup = GenericConfirmPopup("Success", "URL found", self.fn, self.id)
         self.success_popup.show()
 
     def on_error(self, trace):
@@ -187,7 +258,7 @@ class GetYtUrlPopup(QWidget):
 
 
 class DownloadYtPopup(QWidget):
-    def __init__(self, url, name, path, callback, threadpool):
+    def __init__(self, url, name, id, path, callback, threadpool):
         super(DownloadYtPopup, self).__init__()
 
         self.setFixedWidth(400)
@@ -195,6 +266,7 @@ class DownloadYtPopup(QWidget):
         self.threadpool = threadpool
         self.url = url
         self.name = name
+        self.id = id
         self.path = path
         self.fn = callback
 
@@ -213,7 +285,7 @@ class DownloadYtPopup(QWidget):
 
     def start_task(self):
         if self.url != "":
-            self.worker = Worker(YoutubeHandler.download, self.url, self.name, self.path)
+            self.worker = Worker(YoutubeHandler.download, self.url, self.name, self.id, self.path)
             self.worker.signal.result.connect(self.on_result)
             self.worker.signal.error.connect(self.on_error)
             self.threadpool.start(self.worker)
@@ -221,10 +293,12 @@ class DownloadYtPopup(QWidget):
             self.fail_popup.show()
             self.close()
 
-    def on_result(self, name):
-        f = FileHelper("liked.json")
+    def on_result(self, res):
+        id = res[0]
+        path = res[1]
+        f = FileHelper("data.json")
         tracks = json.loads(f.read())
-        tracks[name]["downloaded"] = 1
+        tracks[id]["download-path"] = path
         js = json.dumps(tracks)
         f.overwrite(js)
         self.success_popup.show()
@@ -262,24 +336,26 @@ class BatchDownloadYtPopup(QWidget):
         self.process_entries()
 
     def process_entries(self):
-        f = FileHelper("liked.json")
+        f = FileHelper("data.json")
         tracks = json.loads(f.read())
         for track in tracks:
             if "yt-url" in tracks[track]:
                 self.total += 1
-                self.start_task(tracks[track]["yt-url"], track)
+                self.start_task(tracks[track]["yt-url"], tracks[track]["name"], track)
 
-    def start_task(self, url, name):
-        self.worker = Worker(YoutubeHandler.download, url, name, self.path)
+    def start_task(self, url, name, id):
+        self.worker = Worker(YoutubeHandler.download, url, name, id, self.path)
         self.worker.signal.result.connect(self.on_result)
         self.worker.signal.error.connect(self.on_error)
         self.threadpool.start(self.worker)
 
-    def on_result(self, name):
+    def on_result(self, res):
+        id = res[0]
+        path = res[1]
         self.count += 1
-        f = FileHelper("liked.json")
+        f = FileHelper("data.json")
         tracks = json.loads(f.read())
-        tracks[name]["downloaded"] = 1
+        tracks[id]["download-path"] = path
         js = json.dumps(tracks)
         f.overwrite(js)
         self.on_progress()
@@ -293,29 +369,29 @@ class BatchDownloadYtPopup(QWidget):
 
 
 class YtTitleRefreshPopup:
-    def __init__(self, name, url, callback, threadpool):
-        self.name = name
+    def __init__(self, id, url, callback, threadpool):
+        self.id = id
         self.url = url
         self.fn = callback
         self.threadpool = threadpool
 
-        self.worker = Worker(YoutubeHandler.get_info, self.name, self.url)
+        self.worker = Worker(YoutubeHandler.get_info, self.id, self.url)
         self.worker.signal.result.connect(self.on_result)
         self.worker.signal.error.connect(self.on_error)
         self.threadpool.start(self.worker)
 
     def on_result(self, res):
-        name = res[0]
-        id = res[1]
+        id = res[0]
+        yt_id = res[1]
         title = res[2]
 
-        f = FileHelper("liked.json")
+        f = FileHelper("data.json")
         tracks = json.loads(f.read())
-        tracks[name]["yt-title"] = title
-        tracks[name]["yt-url"] = self.url
+        tracks[id]["yt-title"] = title
+        tracks[id]["yt-url"] = self.url
         js = json.dumps(tracks)
         f.overwrite(js)
-        self.fn(name)
+        self.fn(id)
 
     def on_error(self, trace):
         self.error_popup = GenericConfirmPopup("Error", str(trace), print)

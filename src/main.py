@@ -44,8 +44,8 @@ class MainWindow(QMainWindow):
         for button in self.side_media_list.media_button_list:
             button.connect(self.connect_stuffs)
 
-    def connect_stuffs(self, name):
-        self.info_editing_panel.populate(name)
+    def connect_stuffs(self, id):
+        self.info_editing_panel.populate(id)
         self.info_editing_panel.delete_connect(self.update_tracks)
         self.info_editing_panel.download_connect(self.update_tracks, self.threadpool)
         self.info_editing_panel.search_connect(self.threadpool)
@@ -79,13 +79,13 @@ class SideMediaList(QScrollArea):
         self.widget.setLayout(self.view)
         self.setWidget(self.widget)
 
-        f = FileHelper("liked.json")
+        f = FileHelper("data.json")
         if f.exists():
             self.default_label.hide()
             tracks = json.loads(f.read())
             for track in tracks:
-                media_button = MediaTitleButton(track)
-                if "downloaded" in tracks[track]:
+                media_button = MediaTitleButton(tracks[track]["name"], track)
+                if "download-path" in tracks[track]:
                     media_button.set_downloaded()
                 self.media_button_list.append(media_button)
                 self.view.addWidget(self.media_button_list[len(self.media_button_list) - 1])
@@ -99,7 +99,6 @@ class InfoEditingPanel(QScrollArea):
         self.setWidgetResizable(True)
 
         self.view = QFormLayout()
-        self.name = None
 
         self.default_off = False
         self.default_label = QLabel("No info to show")
@@ -151,25 +150,24 @@ class InfoEditingPanel(QScrollArea):
 
         self.view.addRow(self.button_row)
 
-    def populate(self, name):
-        print(name)
-        self.name = name
+    def populate(self, id):
+        print(id)
+        self.id = id
         if not self.default_off:
             self.switch_off_default()
 
-        f = FileHelper("liked.json")
+        f = FileHelper("data.json")
         tracks = json.loads(f.read())
-        for track in tracks:
-            if track == name:
-                self.name_edit.setText(track)
-                self.artist_edit.setText(tracks[name]["artist"])
-                if "yt-url" in tracks[name]:
-                    self.yt_link_edit.setText(tracks[name]["yt-url"])
-                    self.yt_link_edit.setCursorPosition(0)
-                    self.yt_title.setText(tracks[name]["yt-title"])
-                else:
-                    self.yt_link_edit.setText("")
-                    self.yt_title.setText("")
+        self.name_edit.setText(tracks[id]["name"])
+        self.artist_edit.setText(tracks[id]["artist"])
+        self.album_edit.setText(tracks[id]["album"])
+        if "yt-url" in tracks[id]:
+            self.yt_link_edit.setText(tracks[id]["yt-url"])
+            self.yt_link_edit.setCursorPosition(0)
+            self.yt_title.setText(tracks[id]["yt-title"])
+        else:
+            self.yt_link_edit.setText("")
+            self.yt_title.setText("")
 
     def delete_connect(self, fn):
         self.delete_but.clicked.connect(lambda: self.on_delete_click(fn))
@@ -184,20 +182,22 @@ class InfoEditingPanel(QScrollArea):
         self.yt_title_refresh.clicked.connect(lambda: self.on_refresh_click(self.populate, threadpool))
 
     def on_save_click(self):
-        f = FileHelper("liked.json")
+        f = FileHelper("data.json")
         tracks = json.loads(f.read())
-        tracks[self.name]["artist"] = self.artist_edit.text()
-        tracks[self.name]["yt-url"] = self.yt_link_edit.text()
-        tracks[self.name]["yt-title"] = self.yt_title.text()
+        tracks[self.id]["name"] = self.name_edit.text()
+        tracks[self.id]["artist"] = self.artist_edit.text()
+        tracks[self.id]["album"] = self.album_edit.text()
+        tracks[self.id]["yt-url"] = self.yt_link_edit.text()
+        tracks[self.id]["yt-title"] = self.yt_title.text()
         js = json.dumps(tracks)
         f.overwrite(js)
 
     def on_delete_click(self, update_callback):
-        f = FileHelper("liked.json")
+        f = FileHelper("data.json")
         tracks = json.loads(f.read())
         for track in tracks:  # Don't shorten these, they will break somehow
-            if track == self.name:
-                tracks.pop(self.name)
+            if track == self.id:
+                tracks.pop(self.id)
                 break
         js = json.dumps(tracks)
         f.overwrite(js)
@@ -205,16 +205,16 @@ class InfoEditingPanel(QScrollArea):
 
     def on_download_click(self, fn, threadpool):
         self.path_chooser = GenericPathChooser("Choose a folder to save", "Save path", DownloadYtPopup,
-                                               self.yt_link_edit.text(), self.name, callback=fn, threadpool=threadpool)
+                                               self.yt_link_edit.text(), self.name_edit.text(), self.id, callback=fn, threadpool=threadpool)
         self.path_chooser.show()
 
     def on_search_click(self, fn, threadpool):
-        self.search_popup = GetYtUrlPopup(self.name, fn, threadpool)
+        self.search_popup = GetYtUrlPopup(self.id, self.name_edit.text(), fn, threadpool)
         self.search_popup.show()
 
     def on_refresh_click(self, callback, threadpool):
         self.yt_title.setText("")
-        self.refresh_popup = YtTitleRefreshPopup(self.name, self.yt_link_edit.text(), callback, threadpool)
+        self.refresh_popup = YtTitleRefreshPopup(self.id, self.yt_link_edit.text(), callback, threadpool)
 
 
 class MenuBar(QMenuBar):
@@ -227,6 +227,14 @@ class MenuBar(QMenuBar):
         importMenu.addAction(self.action_import_json)
         self.action_import_spotify = QAction("Import from Spotify...", importMenu)
         importMenu.addAction(self.action_import_spotify)
+
+        addMenu = fileMenu.addMenu("Add")
+        self.action_add_sp_playlist = QAction("Add a Spotify playlist...", addMenu)
+        addMenu.addAction(self.action_add_sp_playlist)
+        self.action_add_yt = QAction("Add a Youtube video...", addMenu)
+        addMenu.addAction(self.action_add_yt)
+        self.action_add_yt_playlist = QAction("Add a Youtube playlist...", addMenu)
+        addMenu.addAction(self.action_add_yt_playlist)
         self.addMenu(fileMenu)
 
         editMenu = QMenu("Action", self)
@@ -241,6 +249,7 @@ class MenuBar(QMenuBar):
     def connect_actions(self, fn, threadpool):
         # self.action_import_json.triggered.connect()
         self.action_import_spotify.triggered.connect(lambda: self.open_import_spotify_popup(fn, threadpool))
+        self.action_add_sp_playlist.triggered.connect(lambda: self.open_add_sp_playlist(fn, threadpool))
         self.action_batch_get_yt_link.triggered.connect(lambda: self.open_batch_get_yt_url_popup(threadpool))
         self.action_batch_download_yt.triggered.connect(lambda: self.open_batch_download_yt_popup(threadpool))
         self.action_refresh.triggered.connect(fn)
@@ -249,6 +258,9 @@ class MenuBar(QMenuBar):
         self.import_spotify_popup = ImportSpotifyPopup(fn, threadpool)
         self.import_spotify_popup.show()
 
+    def open_add_sp_playlist(self, fn, threadpool):
+        self.add_sp_playlist_popup = AddSpotifyPlaylistPopup(fn, threadpool)
+        self.add_sp_playlist_popup.show()
     def open_batch_get_yt_url_popup(self, threadpool):
         self.batch_get_yt_url_popup = BatchGetYtUrlPopup(threadpool)
         self.batch_get_yt_url_popup.show()
@@ -260,10 +272,10 @@ class MenuBar(QMenuBar):
 
 
 class MediaTitleButton(QPushButton):
-    def __init__(self, label):
+    def __init__(self, label, id):
         super(MediaTitleButton, self).__init__()
 
-        self.name = label
+        self.id = id
         self.setText(label)
         self.setStyleSheet("QPushButton { text-align: left; border: 0px; font-size: 15px; padding: 5px} "
                            "QPushButton:checked { text-align: left; border: 0px; font-size: 15px; padding: 5px; "
@@ -274,8 +286,13 @@ class MediaTitleButton(QPushButton):
         self.setStyleSheet("QPushButton { text-align: left; border: 0px; font-size: 15px; padding: 5px; background-color:lightgreen} "
                            "QPushButton:checked { text-align: left; border: 0px; font-size: 15px; padding: 5px; "
                            "background-color:limegreen}")
+
+    def set_normal(self):
+        self.setStyleSheet("QPushButton { text-align: left; border: 0px; font-size: 15px; padding: 5px} "
+                           "QPushButton:checked { text-align: left; border: 0px; font-size: 15px; padding: 5px; "
+                           "background-color:lightblue}")
     def connect(self, fn):
-        self.clicked.connect(lambda: fn(self.name))
+        self.clicked.connect(lambda: fn(self.id))
 
 
 class HLine(QFrame):
