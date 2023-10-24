@@ -59,4 +59,4 @@ def get_info(id, url, progress_callback):
         yt_id = info.get("id", None)
         title = info.get("title", None)
 
-    return id, yt_id, title
+    return id, yt_id, title, url

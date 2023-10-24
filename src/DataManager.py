@@ -28,13 +28,34 @@ class DataManager:
         pre = json.loads(df.read())
         data = {}
         for source in self.watch_list:
+            source_data = {}
             fs = FileHelper(source)
+            if not fs.exists():
+                self.watch_list.remove(source)
+                continue
             tracks = json.loads(fs.read())
+            source_name = source.replace(".json", "")
             for id in tracks:
-                data[source.strip(".json")+":"+id] = tracks[id]
+                source_data[source_name+":"+id] = tracks[id]
+            source_data = dict(sorted(source_data.items(), key=lambda x: x[1]['name'].lower()))
+            data.update(source_data)
+        data_id = []
+        for id in data:
+            data_id.append(id)
+        delete_queue = []
+        for id in pre:
+            if id not in data_id:
+                delete_queue.append(id)
+        for id in delete_queue:
+            pre.pop(id)
         data.update(pre)
         js = json.dumps(data)
         df.overwrite(js)
+
+        sources = json.loads(self.f.read())
+        sources["sources"] = self.watch_list
+        js = json.dumps(sources)
+        self.f.overwrite(js)
 
 
 

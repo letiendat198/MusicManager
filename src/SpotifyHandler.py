@@ -20,7 +20,7 @@ class SpotifyHandler:
     def get_liked_track(self, progress_callback):
         count = 0
         remain = True
-        f = FileHelper("liked_track.json")
+        f = FileHelper("Liked tracks.json")
 
         obj = {}
         while remain:
@@ -58,7 +58,7 @@ class SpotifyHandler:
         f.overwrite(js)
 
         dm = DataManager()
-        dm.add_source("liked_track.json").update()
+        dm.add_source("Liked tracks.json").update()
 
     def get_playlist_track(self, playlist_id, progress_callback):
         count = 0
@@ -66,6 +66,8 @@ class SpotifyHandler:
 
         playlist_name = self.sp.playlist(playlist_id)["name"]
         playlist_name = re.sub('[\\/?:*"<>|]', '', playlist_name)
+        if playlist_name in ["secrets", "data", "sources"]:
+            playlist_name = playlist_name+"#"
         print(playlist_name)
         obj = {}
         while remain:

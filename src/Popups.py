@@ -10,6 +10,8 @@ from SpotifyHandler import *
 
 from FileHelper import *
 from ThreadWorker import Worker
+from DataManager import *
+from MetadataHelper import *
 
 
 class ImportSpotifyPopup(QWidget):
@@ -87,7 +89,7 @@ class AddSpotifyPlaylistPopup(QWidget):
 
         self.threadpool = threadpool
 
-        self.setWindowTitle("Import from Spotify")
+        self.setWindowTitle("Add a playlist from Spotify")
         self.setFixedWidth(350)
 
         self.view = QFormLayout()
@@ -152,6 +154,70 @@ class AddSpotifyPlaylistPopup(QWidget):
         self.success_popup.show()
         self.loading_popup.close()
 
+class AddYtVideoPopup(QWidget):
+    def __init__(self, callback, threadpool):
+        super(AddYtVideoPopup, self).__init__()
+
+        self.fn = callback
+        self.threadpool = threadpool
+
+        self.setWindowTitle("Add a Youtube video")
+        self.setFixedWidth(350)
+
+        self.view = QFormLayout()
+
+        self.video_url = QLineEdit()
+        self.view.addRow("Video URL", self.video_url)
+
+        self.submit = QPushButton("Submit")
+        self.submit.clicked.connect(self.on_click)
+        self.view.addWidget(self.submit)
+
+        self.setLayout(self.view)
+
+    def on_click(self):
+        self.loading_popup = GenericTextPopup("Working", "Working on it")
+        self.loading_popup.show()
+
+        self.worker = Worker(YoutubeHandler.get_info,"placeholder_id", self.video_url.text())
+        self.worker.signal.result.connect(self.on_result)
+        self.worker.signal.error.connect(self.on_error)
+        self.threadpool.start(self.worker)
+        self.close()
+
+    def on_result(self, res):
+        id = res[1]
+        title = res[2]
+        url = res[3]
+
+        f = FileHelper("Youtube.json")
+        if not f.exists():
+            f.write("{}")
+        tracks = json.loads(f.read())
+
+        tracks["Youtube:"+id] = {
+            "name": title,
+            "artist": "",
+            "album": "",
+            "album-image-url": "",
+            "source": "Youtube",
+            "yt-url": url,
+            "yt-title": title
+        }
+        js = json.dumps(tracks)
+        f.overwrite(js)
+        DataManager().add_source("Youtube.json").update()
+
+        self.success_popup = GenericConfirmPopup("Youtube video added", "Added " + title + " to library",
+                                                 self.fn)
+        self.success_popup.show()
+        self.loading_popup.close()
+
+    def on_error(self, trace):
+        self.success_popup = GenericConfirmPopup("Error", str(trace), self.callback_fn)
+        self.success_popup.show()
+        self.loading_popup.close()
+
 class BatchGetYtUrlPopup(QWidget):
     def __init__(self, threadpool):
         super(BatchGetYtUrlPopup, self).__init__()
@@ -178,7 +244,8 @@ class BatchGetYtUrlPopup(QWidget):
         self.f = FileHelper("data.json")
         tracks = json.loads(self.f.read())
         for track in tracks:
-            self.get_url_for_entry(track, tracks[track]["name"], tracks[track]["artist"])
+            if "yt-url" not in tracks[track]:
+                self.get_url_for_entry(track, tracks[track]["name"], tracks[track]["artist"])
 
     def get_url_for_entry(self, id, name, artist):
         self.worker = Worker(YoutubeHandler.get_url, id, name + " " + artist + " lyrics")
@@ -397,6 +464,61 @@ class YtTitleRefreshPopup:
         self.error_popup = GenericConfirmPopup("Error", str(trace), print)
         self.error_popup.show()
 
+
+class BatchWriteMetadataPopup(QWidget):
+    def __init__(self, threadpool):
+        super(BatchWriteMetadataPopup, self).__init__()
+
+        self.setFixedWidth(400)
+
+        self.threadpool = threadpool
+
+        self.setWindowTitle("Writing metadata...")
+
+        self.view = QVBoxLayout()
+
+        self.count = 0
+        self.error = 0
+        self.total = 0
+
+        self.label = QLabel(
+            "Successfully written {success}/{total} \nFailed: {error}".format(success=self.count, total=self.total,
+                                                                                 error=self.error))
+        self.view.addWidget(self.label)
+
+        self.setLayout(self.view)
+
+        self.process_entries()
+
+    def process_entries(self):
+        f = FileHelper("data.json")
+        tracks = json.loads(f.read())
+        for track in tracks:
+            if "download-path" in tracks[track]:
+                self.total += 1
+                image_url = ""
+                if "album-image-url" in tracks[track]:
+                    image_url = tracks[track]["album-image-url"]
+                self.start_task(tracks[track]["download-path"], tracks[track], image_url)
+
+    def start_task(self, path, obj, url):
+        self.worker = Worker(MetadataHelper(path).write, obj)
+        if url != "":
+            self.worker = Worker(MetadataHelper(path).write_and_add_image, obj, url)
+        self.worker.signal.finished.connect(self.on_finish)
+        self.worker.signal.error.connect(self.on_error)
+        self.threadpool.start(self.worker)
+
+    def on_finish(self):
+        self.count += 1
+        self.on_progress()
+
+    def on_error(self, trace):
+        self.error += 1
+        self.on_progress()
+
+    def on_progress(self):
+        self.label.setText("Successfully written {success}/{total} \nFailed: {error}".format(success=self.count,total=self.total,error=self.error))
 
 class GenericPathChooser(QWidget):
     def __init__(self, title, label, fn, *args, **kwargs):

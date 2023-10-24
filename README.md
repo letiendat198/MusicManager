@@ -19,19 +19,22 @@ TODO
 - ~~Create a DataHandler to handle all those playlist and stuffs~~
 - ~~Fetch album data from Spotify and show it~~
 - ~~Allow to add a Spotify playlist~~
-- Allow to add a Youtube video and playlist
+- ~~Allow to add a Youtube video~~ and playlist (I don't use YT playlist much so this gonna be put off :D)
 - ~~Refresh yt-title when yt-url is changed~~
-- Show tracks separated by playlist
-- Batch get url skip songs that already have url
-- Make progress bar
-- Store mp3 path info of songs 
-- Auto change mp3 metadata with supplied info
-- Limit QThreadpool to something more reasonable so that 
-Chrome webdriver not gonna murder someone machine
+- ~~Show tracks separated by playlist~~ (And sorted by A-Z)
+- ~~Batch get url skip songs that already have url~~
+- ~~Store mp3 path info of songs~~
+- Validate downloaded info (Investigate missing downloads too)
+- ~~Auto change mp3 metadata with supplied info~~ (When click "Save" or do Batch write metadata)
+- ~~Limit QThreadpool to something more reasonable so that 
+Chrome webdriver not gonna murder someone machine~~ (Make a setting menu to set this too. Also 6 threads seems resonable)
 - Show album image
+- Do import json
+- Get track num?
 - Add a settings menu
 - Add icon to specify music source
 - Change popups to actually look decent
+- Make progress bar
 
 ## Issues tracker
 - A lot of crash cause no handling yet

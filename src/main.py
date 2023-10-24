@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import *
 from Popups import *
 from FileHelper import *
 from ThreadWorker import Worker
+from MetadataHelper import *
 
 
 class MainWindow(QMainWindow):
@@ -15,6 +16,7 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.threadpool = QThreadPool()
+        self.threadpool.setMaxThreadCount(6)
         print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
 
         self.MenuBar = MenuBar()
@@ -83,7 +85,13 @@ class SideMediaList(QScrollArea):
         if f.exists():
             self.default_label.hide()
             tracks = json.loads(f.read())
+            pre = ""
             for track in tracks:
+                playlist = track.split(":")[0]
+                if playlist != pre:
+                    self.view.addWidget(QLabel(playlist))
+                    self.view.addWidget(HLine())
+                    pre = playlist
                 media_button = MediaTitleButton(tracks[track]["name"], track)
                 if "download-path" in tracks[track]:
                     media_button.set_downloaded()
@@ -192,6 +200,14 @@ class InfoEditingPanel(QScrollArea):
         js = json.dumps(tracks)
         f.overwrite(js)
 
+        if "download-path" in tracks[self.id]:
+            path = tracks[self.id]["download-path"]
+            metadata = MetadataHelper(path)
+            metadata.write(tracks[self.id])
+            if "album-image-url" in tracks[self.id]:
+                if tracks[self.id]["album-image-url"]!="":
+                    metadata.add_image_from_url(tracks[self.id]["album-image-url"])
+
     def on_delete_click(self, update_callback):
         f = FileHelper("data.json")
         tracks = json.loads(f.read())
@@ -244,14 +260,18 @@ class MenuBar(QMenuBar):
         editMenu.addAction(self.action_batch_get_yt_link)
         self.action_batch_download_yt = QAction("Batch: Download from Youtube", editMenu)
         editMenu.addAction(self.action_batch_download_yt)
+        self.action_batch_write_metadata = QAction("Batch: Write metadata to downloaded files", editMenu)
+        editMenu.addAction(self.action_batch_write_metadata)
         self.addMenu(editMenu)
 
     def connect_actions(self, fn, threadpool):
         # self.action_import_json.triggered.connect()
         self.action_import_spotify.triggered.connect(lambda: self.open_import_spotify_popup(fn, threadpool))
         self.action_add_sp_playlist.triggered.connect(lambda: self.open_add_sp_playlist(fn, threadpool))
+        self.action_add_yt.triggered.connect(lambda: self.open_add_yt(fn, threadpool))
         self.action_batch_get_yt_link.triggered.connect(lambda: self.open_batch_get_yt_url_popup(threadpool))
         self.action_batch_download_yt.triggered.connect(lambda: self.open_batch_download_yt_popup(threadpool))
+        self.action_batch_write_metadata.triggered.connect(lambda: self.open_batch_write_metadata_popup(threadpool))
         self.action_refresh.triggered.connect(fn)
 
     def open_import_spotify_popup(self, fn, threadpool):
@@ -261,6 +281,11 @@ class MenuBar(QMenuBar):
     def open_add_sp_playlist(self, fn, threadpool):
         self.add_sp_playlist_popup = AddSpotifyPlaylistPopup(fn, threadpool)
         self.add_sp_playlist_popup.show()
+
+    def open_add_yt(self, fn, threadpool):
+        self.add_yt_popup = AddYtVideoPopup(fn, threadpool)
+        self.add_yt_popup.show()
+
     def open_batch_get_yt_url_popup(self, threadpool):
         self.batch_get_yt_url_popup = BatchGetYtUrlPopup(threadpool)
         self.batch_get_yt_url_popup.show()
@@ -269,6 +294,10 @@ class MenuBar(QMenuBar):
         self.batch_download_yt = GenericPathChooser("Choose a folder to save", "Save path", BatchDownloadYtPopup,
                                                     threadpool=threadpool)
         self.batch_download_yt.show()
+
+    def open_batch_write_metadata_popup(self, threadpool):
+        self.batch_write_metadata = BatchWriteMetadataPopup(threadpool)
+        self.batch_write_metadata.show()
 
 
 class MediaTitleButton(QPushButton):
@@ -300,6 +329,25 @@ class HLine(QFrame):
         super(HLine, self).__init__()
         self.setFrameShape(QFrame.HLine)
         self.setFrameShadow(QFrame.Sunken)
+
+
+class PlaylistSeperator(QHBoxLayout):
+    def __init__(self, name):
+        super(PlaylistSeperator, self).__init__()
+
+        self.line = HLine()
+
+        self.label = QLabel(name)
+        self.font = QFont()
+        self.font.setPointSize(10)
+        self.label.setFont(self.font)
+        self.label.setContentsMargins(0, 0, 5, 5)
+        self.label.setWordWrap(True)
+        self.label.setFrameShape(QFrame.NoFrame)
+        self.label.setLineWidth(0)
+
+        self.addWidget(self.label)
+        self.addWidget(self.line)
 
 
 if __name__ == "__main__":
