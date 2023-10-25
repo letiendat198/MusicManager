@@ -51,9 +51,6 @@ class SpotifyHandler:
                 obj.update(track_dict)
                 print(obj)
 
-        if f.exists():
-            pre = json.loads(f.read())
-            obj.update(pre)
         js = json.dumps(obj)
         f.overwrite(js)
 
@@ -98,9 +95,6 @@ class SpotifyHandler:
                 obj.update(track_dict)
                 print(obj)
         f = FileHelper(playlist_name+".json")
-        if f.exists():
-            pre = json.loads(f.read())
-            obj.update(pre)
         js = json.dumps(obj)
         f.overwrite(js)
 

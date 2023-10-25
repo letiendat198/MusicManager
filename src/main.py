@@ -1,5 +1,7 @@
+import os
 import sys
 import json
+import urllib3
 
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
@@ -7,8 +9,9 @@ from PyQt5.QtWidgets import *
 
 from Popups import *
 from FileHelper import *
-from ThreadWorker import Worker
+from ThreadWorker import *
 from MetadataHelper import *
+from DataManager import *
 
 
 class MainWindow(QMainWindow):
@@ -23,7 +26,7 @@ class MainWindow(QMainWindow):
         self.MenuBar.connect_actions(self.update_tracks, self.threadpool)
         self.setMenuBar(self.MenuBar)
 
-        self.setWindowTitle("Media Manager")
+        self.setWindowTitle("Music Manager")
         self.resize(1200, 800)
 
         main_layout = QHBoxLayout()
@@ -39,19 +42,14 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(main_widget)
 
+        self.info_editing_panel.save_for_later(self.update_tracks, self.threadpool)
+
         self.update_tracks()
 
     def update_tracks(self):
         self.side_media_list.populate()
         for button in self.side_media_list.media_button_list:
-            button.connect(self.connect_stuffs)
-
-    def connect_stuffs(self, id):
-        self.info_editing_panel.populate(id)
-        self.info_editing_panel.delete_connect(self.update_tracks)
-        self.info_editing_panel.download_connect(self.update_tracks, self.threadpool)
-        self.info_editing_panel.search_connect(self.threadpool)
-        self.info_editing_panel.refresh_connect(self.threadpool)
+            button.connect(self.info_editing_panel.populate)
 
 
 class SideMediaList(QScrollArea):
@@ -116,19 +114,30 @@ class InfoEditingPanel(QScrollArea):
         self.widget.setLayout(self.view)
         self.setWidget(self.widget)
 
+        self.path_chooser = GenericPathChooser("Choose a folder to save", "Save path")
+        self.search_popup = GetYtUrlPopup()
+
     def switch_off_default(self):
         self.default_off = True
 
         self.default_label.hide()
 
+        self.image_row = QHBoxLayout()
+        self.image = ImageLabel()
+        self.image.set_image_from_file("resources/placeholder.jpg")
+        self.image.signal.clicked.connect(self.on_image_click)
+
+        self.info_side = QFormLayout()
         self.name_edit = QLineEdit()
-        self.view.addRow("Track name", self.name_edit)
-
+        self.info_side.addRow("Track name", self.name_edit)
         self.artist_edit = QLineEdit()
-        self.view.addRow("Artist", self.artist_edit)
-
+        self.info_side.addRow("Artist", self.artist_edit)
         self.album_edit = QLineEdit()
-        self.view.addRow("Album", self.album_edit)
+        self.info_side.addRow("Album", self.album_edit)
+        self.image_row.addWidget(self.image)
+        self.image_row.addLayout(self.info_side)
+
+        self.view.addRow(self.image_row)
 
         self.view.addRow(HLine())
 
@@ -158,6 +167,15 @@ class InfoEditingPanel(QScrollArea):
 
         self.view.addRow(self.button_row)
 
+        self.delete_but.clicked.connect(lambda: self.on_delete_click(self.callback))
+        self.download_but.clicked.connect(lambda: self.on_download_click(self.callback, self.threadpool))
+        self.yt_search_but.clicked.connect(lambda: self.on_search_click(self.populate, self.threadpool))
+        self.yt_title_refresh.clicked.connect(lambda: self.on_refresh_click(self.populate, self.threadpool))
+
+    def save_for_later(self, callback, threadpool):
+        self.callback = callback
+        self.threadpool = threadpool
+
     def populate(self, id):
         print(id)
         self.id = id
@@ -176,18 +194,26 @@ class InfoEditingPanel(QScrollArea):
         else:
             self.yt_link_edit.setText("")
             self.yt_title.setText("")
+        if "download-path" in tracks[id]:
+            img_data = MetadataHelper(tracks[id]["download-path"]).get_album_image()
+            if img_data is not None:
+                print("Loading image from local file")
+                self.image.set_image_from_data(img_data)
+            else:
+                print("No image data found. Using placeholder")
+                self.image.set_image_from_file("resources/placeholder.jpg")
+        elif "album-image-url" in tracks[id] and tracks[id]["album-image-url"] != "":
+            url = tracks[id]["album-image-url"]
+            print("Fetching image via url", url)
+            http = urllib3.PoolManager()
+            resp = http.request("GET", url)
+            self.image.set_image_from_data(resp.data)
+        else:
+            print("No image data found. Using placeholder")
+            self.image.set_image_from_file("resources/placeholder.jpg")
 
-    def delete_connect(self, fn):
-        self.delete_but.clicked.connect(lambda: self.on_delete_click(fn))
-
-    def download_connect(self, fn, threadpool):
-        self.download_but.clicked.connect(lambda: self.on_download_click(fn, threadpool))
-
-    def search_connect(self, threadpool):
-        self.yt_search_but.clicked.connect(lambda: self.on_search_click(self.populate, threadpool))
-
-    def refresh_connect(self, threadpool):
-        self.yt_title_refresh.clicked.connect(lambda: self.on_refresh_click(self.populate, threadpool))
+    def on_image_click(self):
+        self.image_chooser = ImageChooserPopup(self.populate, self.id)
 
     def on_save_click(self):
         f = FileHelper("data.json")
@@ -204,28 +230,32 @@ class InfoEditingPanel(QScrollArea):
             path = tracks[self.id]["download-path"]
             metadata = MetadataHelper(path)
             metadata.write(tracks[self.id])
-            if "album-image-url" in tracks[self.id]:
-                if tracks[self.id]["album-image-url"]!="":
-                    metadata.add_image_from_url(tracks[self.id]["album-image-url"])
+            # if "album-image-url" in tracks[self.id]:
+            #     if tracks[self.id]["album-image-url"] != "":
+            #         metadata.add_image_from_url(tracks[self.id]["album-image-url"])
 
     def on_delete_click(self, update_callback):
         f = FileHelper("data.json")
         tracks = json.loads(f.read())
-        for track in tracks:  # Don't shorten these, they will break somehow
-            if track == self.id:
-                tracks.pop(self.id)
-                break
+        if "download-path" in tracks[self.id]:
+            path = tracks[self.id]["download-path"]
+            tf = FileHelper(path)
+            if tf.exists():
+                print("Downloaded file found, removing", path)
+                tf.delete()
+        print("Deleting", tracks[self.id]["name"])
+        tracks.pop(self.id)
         js = json.dumps(tracks)
         f.overwrite(js)
         update_callback()
 
     def on_download_click(self, fn, threadpool):
-        self.path_chooser = GenericPathChooser("Choose a folder to save", "Save path", DownloadYtPopup,
-                                               self.yt_link_edit.text(), self.name_edit.text(), self.id, callback=fn, threadpool=threadpool)
+        self.path_chooser.update_params(DownloadYtPopup,self.yt_link_edit.text(), self.name_edit.text(), self.id,
+                                        callback=fn, threadpool=threadpool)
         self.path_chooser.show()
 
     def on_search_click(self, fn, threadpool):
-        self.search_popup = GetYtUrlPopup(self.id, self.name_edit.text(), fn, threadpool)
+        self.search_popup.update_params(self.id, self.name_edit.text(), fn, threadpool)
         self.search_popup.show()
 
     def on_refresh_click(self, callback, threadpool):
@@ -272,7 +302,11 @@ class MenuBar(QMenuBar):
         self.action_batch_get_yt_link.triggered.connect(lambda: self.open_batch_get_yt_url_popup(threadpool))
         self.action_batch_download_yt.triggered.connect(lambda: self.open_batch_download_yt_popup(threadpool))
         self.action_batch_write_metadata.triggered.connect(lambda: self.open_batch_write_metadata_popup(threadpool))
-        self.action_refresh.triggered.connect(fn)
+        self.action_refresh.triggered.connect(lambda: self.on_refresh(fn))
+
+    def on_refresh(self, fn):
+        DataManager().validate_download()
+        fn()
 
     def open_import_spotify_popup(self, fn, threadpool):
         self.import_spotify_popup = ImportSpotifyPopup(fn, threadpool)
@@ -291,8 +325,8 @@ class MenuBar(QMenuBar):
         self.batch_get_yt_url_popup.show()
 
     def open_batch_download_yt_popup(self, threadpool):
-        self.batch_download_yt = GenericPathChooser("Choose a folder to save", "Save path", BatchDownloadYtPopup,
-                                                    threadpool=threadpool)
+        self.batch_download_yt = GenericPathChooser("Choose a folder to save", "Save path")
+        self.batch_download_yt.update_params(BatchDownloadYtPopup, threadpool=threadpool)
         self.batch_download_yt.show()
 
     def open_batch_write_metadata_popup(self, threadpool):
@@ -312,14 +346,16 @@ class MediaTitleButton(QPushButton):
         self.setCheckable(True)
 
     def set_downloaded(self):
-        self.setStyleSheet("QPushButton { text-align: left; border: 0px; font-size: 15px; padding: 5px; background-color:lightgreen} "
-                           "QPushButton:checked { text-align: left; border: 0px; font-size: 15px; padding: 5px; "
-                           "background-color:limegreen}")
+        self.setStyleSheet(
+            "QPushButton { text-align: left; border: 0px; font-size: 15px; padding: 5px; background-color:lightgreen} "
+            "QPushButton:checked { text-align: left; border: 0px; font-size: 15px; padding: 5px; "
+            "background-color:limegreen}")
 
     def set_normal(self):
         self.setStyleSheet("QPushButton { text-align: left; border: 0px; font-size: 15px; padding: 5px} "
                            "QPushButton:checked { text-align: left; border: 0px; font-size: 15px; padding: 5px; "
                            "background-color:lightblue}")
+
     def connect(self, fn):
         self.clicked.connect(lambda: fn(self.id))
 
@@ -348,6 +384,30 @@ class PlaylistSeperator(QHBoxLayout):
 
         self.addWidget(self.label)
         self.addWidget(self.line)
+
+
+class ImageLabel(QLabel):
+    def __init__(self):
+        super(ImageLabel, self).__init__()
+        self.pixmap = QPixmap()
+        self.signal = Signal()
+
+    def mousePressEvent(self, ev, QMouseEvent=None):
+        self.signal.clicked.emit()
+
+    def set_image_from_data(self, img):
+        self.pixmap.loadFromData(img)
+        self.pixmap = self.pixmap.scaled(128, 128, Qt.KeepAspectRatio)
+        self.setPixmap(self.pixmap)
+
+    def set_image_from_file(self, path):
+        self.pixmap.load(path)
+        self.pixmap = self.pixmap.scaled(128, 128, Qt.KeepAspectRatio)
+        self.setPixmap(self.pixmap)
+
+
+class Signal(QObject):
+    clicked = pyqtSignal()
 
 
 if __name__ == "__main__":

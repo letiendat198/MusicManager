@@ -1,5 +1,7 @@
 *.json
 .cache
+build
+dist
 venv
 src/downloaded
 src/__pycache__

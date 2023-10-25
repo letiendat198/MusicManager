@@ -19,5 +19,12 @@ class FileHelper:
         f = open(self.file_name, 'r')
         return f.read()
 
+    def read_bytes(self):
+        f = open(self.file_name, 'rb')
+        return f.read()
+
     def exists(self):
         return os.path.isfile(self.file_name)
+
+    def delete(self):
+        os.remove(self.file_name)

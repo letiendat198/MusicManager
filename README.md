@@ -7,10 +7,14 @@ Am I the only person who have these issues?
 No? Then this app is perhaps for you 
 
 ## Download
-Download from [release](https://github.com/letiendat198/MediaManager/releases) (not yet!)
+Download from [release](https://github.com/letiendat198/MediaManager/releases)
 
-## How to use
-TODO
+## Features
+- Get liked tracks and playlists from Spotify
+- Get individual Youtube video
+- Search for the corresponding video on Youtube
+- Download from Youtube
+- Edit and write metadata (image included)
 
 ## TODO
 - ~~Add Batch download Youtube~~
@@ -24,11 +28,16 @@ TODO
 - ~~Show tracks separated by playlist~~ (And sorted by A-Z)
 - ~~Batch get url skip songs that already have url~~
 - ~~Store mp3 path info of songs~~
-- Validate downloaded info (Investigate missing downloads too)
-- ~~Auto change mp3 metadata with supplied info~~ (When click "Save" or do Batch write metadata)
+- ~~Validate downloaded info~~ (When hit Refresh) (Investigate missing downloads too - Probably overlapping song names)
+- ~~Auto change mp3 metadata with supplied info~~ (When download, click "Save" or do Batch write metadata. Batch download 
+not gonna write metadata. Write batch metadata manually)
 - ~~Limit QThreadpool to something more reasonable so that 
 Chrome webdriver not gonna murder someone machine~~ (Make a setting menu to set this too. Also 6 threads seems resonable)
-- Show album image
+- ~~Show album image~~ ~~(Rework showing logic: Prioritize embeded image)~~
+- ~~Allow user to add album image~~
+- ~~Delete button should delete downloaded track~~
+
+Seems ready for release! More features will be added later when I feel like it :D
 - Do import json
 - Get track num?
 - Add a settings menu
@@ -37,6 +46,12 @@ Chrome webdriver not gonna murder someone machine~~ (Make a setting menu to set 
 - Make progress bar
 
 ## Issues tracker
-- A lot of crash cause no handling yet
-- Sometimes batch operations will fail with no apparent cause
+- ~~Flickering popups~~ (Turns out you don't init QWidget many times. And don't restate UI elements many time. 
+Just handle dynamic stuffs in a seperate function. Somehow only affected Download and Search)
+- ~~Image chooser keep reopen~~ (Do not write .connect() in somewhere that run multiple time)
+- ~~Song with same name will overlap when download~~ (File name now come with artist)
+- ~~Delete button (Also other buttons too but less obvious) firing n times when used n times~~ (Again, do not write
+.connect() somewhere it will be called multiple times)
+- A few will crash randomly cause I can't squash all bugs (TODO: Add a logging system)
+- Sometimes batch operations will fail with no apparent cause (More threads more fails)
 - Will add when remember

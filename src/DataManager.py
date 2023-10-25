@@ -1,4 +1,5 @@
 import json
+import os
 
 from FileHelper import *
 
@@ -12,7 +13,10 @@ class DataManager:
             sources = json.loads(self.f.read())
             self.watch_list = sources["sources"]
         else:
-            self.f.write("{}")
+            sources = {}
+            sources["sources"] = ""
+            js = json.dumps(sources)
+            self.f.overwrite(js)
 
     def add_source(self, source):
         if source not in self.watch_list:
@@ -25,6 +29,8 @@ class DataManager:
 
     def update(self):
         df = FileHelper("data.json")
+        if not df.exists():
+            df.write("{}")
         pre = json.loads(df.read())
         data = {}
         for source in self.watch_list:
@@ -47,6 +53,11 @@ class DataManager:
             if id not in data_id:
                 delete_queue.append(id)
         for id in delete_queue:
+            if "download-path" in pre[id]:
+                p = pre[id]["download-path"]
+                pf = FileHelper(p)
+                if pf.exists():
+                    pf.delete()
             pre.pop(id)
         data.update(pre)
         js = json.dumps(data)
@@ -57,6 +68,22 @@ class DataManager:
         js = json.dumps(sources)
         self.f.overwrite(js)
 
-
+    def validate_download(self):
+        df = FileHelper("data.json")
+        if not df.exists():
+            df.write("{}")
+        tracks = json.loads(df.read())
+        print("Validating", len(tracks), "entries")
+        count = 0
+        for track in tracks:
+            if "download-path" in tracks[track]:
+                count += 1
+                path = tracks[track]["download-path"]
+                if not os.path.isfile(path):
+                    print("Found invalid download on,", tracks[track]["name"])
+                    tracks[track].pop("download-path")
+        js = json.dumps(tracks)
+        df.overwrite(js)
+        print("Validated", count, "entries that have download-path")
 
 
