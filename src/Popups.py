@@ -23,6 +23,8 @@ class ImportSpotifyPopup(QWidget):
         self.setWindowTitle("Import from Spotify")
         self.setFixedWidth(350)
 
+        self.setWindowModality(Qt.ApplicationModal)
+
         self.view = QFormLayout()
 
         self.id_input = QLineEdit()
@@ -92,6 +94,7 @@ class AddSpotifyPlaylistPopup(QWidget):
 
         self.setWindowTitle("Add a playlist from Spotify")
         self.setFixedWidth(350)
+        self.setWindowModality(Qt.ApplicationModal)
 
         self.view = QFormLayout()
 
@@ -165,6 +168,7 @@ class AddYtVideoPopup(QWidget):
 
         self.setWindowTitle("Add a Youtube video")
         self.setFixedWidth(350)
+        self.setWindowModality(Qt.ApplicationModal)
 
         self.view = QFormLayout()
 
@@ -197,7 +201,7 @@ class AddYtVideoPopup(QWidget):
             f.write("{}")
         tracks = json.loads(f.read())
 
-        tracks["Youtube:" + id] = {
+        tracks[id] = {
             "name": title,
             "artist": "",
             "album": "",
@@ -225,16 +229,17 @@ class BatchGetYtUrlPopup(QWidget):
     def __init__(self, threadpool):
         super(BatchGetYtUrlPopup, self).__init__()
 
-        self.setFixedWidth(500)
+        self.setFixedWidth(350)
 
         self.threadpool = threadpool
         self.success_count = 0
         self.error_count = 0
+        self.finished_count = 0
+        self.total = 0
 
         self.setWindowTitle("Getting Youtube URLs")
 
         self.view = QVBoxLayout()
-        self.view.setAlignment(Qt.AlignCenter)
 
         self.label = QLabel(
             "Got {success} urls\nFailed: {fail}".format(success=self.success_count, fail=self.error_count))
@@ -249,17 +254,22 @@ class BatchGetYtUrlPopup(QWidget):
         tracks = json.loads(self.f.read())
         for track in tracks:
             if "yt-url" not in tracks[track]:
+                self.total += 1
                 self.get_url_for_entry(track, tracks[track]["name"], tracks[track]["artist"])
+        if self.total == 0:
+            self.total += 1
+            self.on_finish()
 
     def get_url_for_entry(self, id, name, artist):
         self.worker = Worker(YoutubeHandler.get_url, id, name + " " + artist + " lyrics")
         self.worker.signal.result.connect(self.on_result)
         self.worker.signal.error.connect(self.on_error)
+        self.worker.signal.finished.connect(self.on_finish)
         self.threadpool.start(self.worker)
 
     def on_update(self):
         self.label.setText(
-            "Got {success} urls\nFailed: {fail}".format(success=self.success_count, fail=self.error_count))
+            "Got {success}/{total} urls\nFailed: {fail}".format(success=self.success_count, total=self.total, fail=self.error_count))
 
     def on_result(self, res):
         self.success_count += 1
@@ -277,12 +287,21 @@ class BatchGetYtUrlPopup(QWidget):
         self.error_count += 1
         self.on_update()
 
+    def on_finish(self):
+        self.finished_count += 1
+        if self.finished_count == self.total:
+            self.finish_popup = GenericConfirmPopup("Get Youtube URLs", "Done", print)
+            self.finish_popup.show()
+            self.close()
+
+
 
 class GetYtUrlPopup(QWidget):
     def __init__(self):
         super(GetYtUrlPopup, self).__init__()
 
         self.setWindowTitle("Search for Youtube URL")
+        self.setWindowModality(Qt.ApplicationModal)
 
         self.view = QFormLayout()
         self.keyword = QLineEdit()
@@ -334,8 +353,6 @@ class DownloadYtPopup(QWidget):
     def __init__(self, url, name, id, path, callback, threadpool):
         super(DownloadYtPopup, self).__init__()
 
-        self.setFixedWidth(400)
-
         self.threadpool = threadpool
         self.url = url
         self.name = name
@@ -345,9 +362,13 @@ class DownloadYtPopup(QWidget):
 
         self.setWindowTitle("Downloading music")
 
+        self.setWindowModality(Qt.ApplicationModal)
+
         self.view = QVBoxLayout()
 
         self.label = QLabel("Downloading")
+        self.label.setAlignment(Qt.AlignCenter)
+        self.label.setMinimumWidth(300)
         self.view.addWidget(self.label)
 
         self.setLayout(self.view)
@@ -392,13 +413,15 @@ class DownloadYtPopup(QWidget):
 
 
 class BatchDownloadYtPopup(QWidget):
-    def __init__(self, path, threadpool):
+    def __init__(self, path, callback, threadpool):
         super(BatchDownloadYtPopup, self).__init__()
 
         self.setFixedWidth(400)
+        self.setWindowModality(Qt.ApplicationModal)
 
         self.threadpool = threadpool
         self.path = path
+        self.callback = callback
 
         self.setWindowTitle("Downloading...")
 
@@ -407,6 +430,7 @@ class BatchDownloadYtPopup(QWidget):
         self.count = 0
         self.error = 0
         self.total = 0
+        self.finished_count = 0
 
         self.label = QLabel(
             "Successfully downloaded {success}/{total} \nFailed: {error}".format(success=self.count, total=self.total,
@@ -429,6 +453,7 @@ class BatchDownloadYtPopup(QWidget):
         self.worker = Worker(YoutubeHandler.download, url, name, id, self.path)
         self.worker.signal.result.connect(self.on_result)
         self.worker.signal.error.connect(self.on_error)
+        self.worker.signal.finished.connect(self.on_finish)
         self.threadpool.start(self.worker)
 
     def on_result(self, res):
@@ -455,6 +480,12 @@ class BatchDownloadYtPopup(QWidget):
             "Successfully downloaded {success}/{total} \nFailed: {error}".format(success=self.count, total=self.total,
                                                                                  error=self.error))
 
+    def on_finish(self):
+        self.finished_count += 1
+        if self.finished_count == self.total:
+            self.finished_popup = GenericConfirmPopup("Download from Youtube", "Done", self.callback)
+            self.finished_popup.show()
+            self.close()
 
 class YtTitleRefreshPopup:
     def __init__(self, id, url, callback, threadpool):
@@ -495,6 +526,7 @@ class BatchWriteMetadataPopup(QWidget):
         self.threadpool = threadpool
 
         self.setWindowTitle("Writing metadata...")
+        self.setWindowModality(Qt.ApplicationModal)
 
         self.view = QVBoxLayout()
 
@@ -542,6 +574,10 @@ class BatchWriteMetadataPopup(QWidget):
         self.label.setText(
             "Successfully written {success}/{total} \nFailed: {error}".format(success=self.count, total=self.total,
                                                                               error=self.error))
+        if self.error + self.count >= self.total:
+            self.finished_popup = GenericConfirmPopup("Write metadata", "Done", print)
+            self.finished_popup.show()
+            self.close()
 
 
 class ImageChooserPopup(QWidget):
@@ -571,6 +607,7 @@ class GenericPathChooser(QWidget):
         super(GenericPathChooser, self).__init__()
 
         self.setWindowTitle(title)
+        self.setWindowModality(Qt.ApplicationModal)
 
         self.view = QFormLayout()
 
@@ -616,11 +653,14 @@ class GenericConfirmPopup(QWidget):
         self.kwargs = kwargs
 
         self.setWindowTitle(title)
+        self.setWindowModality(Qt.ApplicationModal)
 
         self.view = QVBoxLayout()
-        self.view.setAlignment(Qt.AlignCenter)
 
         self.label = QLabel(label)
+        self.label.setAlignment(Qt.AlignCenter)
+        self.label.setMinimumWidth(300)
+        self.label.setWordWrap(True)
         self.view.addWidget(self.label)
 
         self.confirm = QPushButton("OK")
@@ -639,11 +679,15 @@ class GenericTextPopup(QWidget):
         super(GenericTextPopup, self).__init__()
 
         self.setWindowTitle(title)
+        self.setWindowModality(Qt.ApplicationModal)
 
         self.view = QVBoxLayout()
         self.view.setAlignment(Qt.AlignCenter)
 
         self.label = QLabel(label)
+        self.label.setAlignment(Qt.AlignCenter)
+        self.label.setMinimumWidth(300)
+        self.label.setWordWrap(True)
         self.view.addWidget(self.label)
 
         self.setLayout(self.view)

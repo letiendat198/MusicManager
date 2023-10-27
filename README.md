@@ -38,6 +38,7 @@ Chrome webdriver not gonna murder someone machine~~ (Make a setting menu to set 
 - ~~Delete button should delete downloaded track~~
 
 Seems ready for release! More features will be added later when I feel like it :D
+- Allow user to add a mp3 file as download-path for songs
 - Do import json
 - Get track num?
 - Add a settings menu
@@ -52,6 +53,8 @@ Just handle dynamic stuffs in a seperate function. Somehow only affected Downloa
 - ~~Song with same name will overlap when download~~ (File name now come with artist)
 - ~~Delete button (Also other buttons too but less obvious) firing n times when used n times~~ (Again, do not write
 .connect() somewhere it will be called multiple times)
-- A few will crash randomly cause I can't squash all bugs (TODO: Add a logging system)
+- DataManager takes 2 update first time to generate working data.json
+- Batch get url won't close automatically
+- A few things will crash randomly cause I can't squash all bugs (TODO: Add a logging system)
 - Sometimes batch operations will fail with no apparent cause (More threads more fails)
 - Will add when remember

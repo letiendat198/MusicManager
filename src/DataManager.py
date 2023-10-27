@@ -67,6 +67,7 @@ class DataManager:
         sources["sources"] = self.watch_list
         js = json.dumps(sources)
         self.f.overwrite(js)
+        return self
 
     def validate_download(self):
         df = FileHelper("data.json")
@@ -86,4 +87,19 @@ class DataManager:
         df.overwrite(js)
         print("Validated", count, "entries that have download-path")
 
-
+    def delete_entry(self, id):
+        df = FileHelper("data.json")
+        if df.exists():
+            split_id = id.split(":")
+            source_playlist = split_id[0]
+            source_id = split_id[1]
+            data_tracks = json.loads(df.read())
+            data_tracks.pop(id)
+            sf = FileHelper(source_playlist+".json")
+            if sf.exists():
+                source_tracks = json.loads(sf.read())
+                source_tracks.pop(source_id)
+                js = json.dumps(source_tracks)
+                sf.overwrite(js)
+            js = json.dumps(data_tracks)
+            df.overwrite(js)
