@@ -6,17 +6,17 @@ class FileHelper:
         self.file_name = file_name
 
     def write(self, content):
-        f = open(self.file_name, 'a')
+        f = open(self.file_name, 'a', encoding='utf-8')
         f.write(content + '\n')
         f.close()
 
     def overwrite(self, content):
-        f = open(self.file_name, 'w')
+        f = open(self.file_name, 'w', encoding='utf-8')
         f.write(content + '\n')
         f.close()
 
     def read(self):
-        f = open(self.file_name, 'r')
+        f = open(self.file_name, 'r', encoding='utf-8')
         return f.read()
 
     def read_bytes(self):

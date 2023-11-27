@@ -1,4 +1,5 @@
 *.json
+!src/resources/*.json
 .cache
 build
 dist

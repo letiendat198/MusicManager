@@ -12,6 +12,12 @@ from FileHelper import *
 from ThreadWorker import Worker
 from DataManager import *
 from MetadataHelper import *
+from SettingsManager import *
+from LanguageHelper import *
+
+language_helper = LanguageHelper("en_us")
+_ = language_helper.get
+settings = SettingsManager()
 
 
 class ImportSpotifyPopup(QWidget):
@@ -225,6 +231,141 @@ class AddYtVideoPopup(QWidget):
         self.loading_popup.close()
 
 
+class AddYtPlaylistPopup(QWidget):
+    def __init__(self, callback, threadpool):
+        super(AddYtPlaylistPopup, self).__init__()
+
+        self.fn = callback
+        self.threadpool = threadpool
+
+        self.setWindowTitle("Add a Youtube playlist")
+        self.setFixedWidth(400)
+        self.setWindowModality(Qt.ApplicationModal)
+
+        self.view = QFormLayout()
+
+        self.video_url = QLineEdit()
+        self.view.addRow("Playlist URL", self.video_url)
+
+        self.submit = QPushButton("Submit")
+        self.submit.clicked.connect(self.on_click)
+        self.view.addWidget(self.submit)
+
+        self.setLayout(self.view)
+
+    def on_click(self):
+        self.loading_popup = GenericTextPopup("Working", "Working on it")
+        self.loading_popup.show()
+
+        self.worker = Worker(YoutubeHandler.get_playlist_info, self.video_url.text())
+        self.worker.signal.result.connect(self.on_result)
+        self.worker.signal.error.connect(self.on_error)
+        self.threadpool.start(self.worker)
+        self.close()
+
+    def on_result(self, res):
+        title = res[0]
+        data = res[1]
+
+        f = FileHelper(title + ".json")
+        js = json.dumps(data)
+        f.overwrite(js)
+        DataManager().add_source(title + ".json").update()
+
+        self.success_popup = GenericConfirmPopup("Youtube playlist added", "Added " + title + " to library",
+                                                 self.fn)
+        self.success_popup.show()
+        self.loading_popup.close()
+
+    def on_error(self, trace):
+        self.success_popup = GenericConfirmPopup("Error", str(trace), self.callback_fn)
+        self.success_popup.show()
+        self.loading_popup.close()
+
+
+class SetExistingPath(QWidget):
+    def __init__(self, path, callback, threadpool):
+        super(SetExistingPath, self).__init__()
+        self.path = path
+        self.threadpool = threadpool
+        self.callback = callback
+
+        self.success_count = 0
+        self.error_count = 0
+        self.total = 0
+
+        self.setWindowTitle("Matching files...")
+
+        self.view = QVBoxLayout()
+
+        self.label = QLabel(
+            "Matched {success}/{total} files\nFailed to match: {fail} files".format(success=self.success_count,
+                                                                                    fail=self.error_count,
+                                                                                    total=self.total))
+        self.view.addWidget(self.label)
+
+        self.setLayout(self.view)
+
+        self.queue = []
+
+        f = FileHelper("data.json")
+        self.entries = json.loads(f.read())
+        self.process_entries()
+
+    def process_entries(self):
+        for file in os.listdir(self.path):
+            if file.endswith(".mp3"):
+                self.total += 1
+                self.on_update()
+        for file in os.listdir(self.path):
+            if file.endswith(".mp3"):
+                self.start_search_task(file)
+
+    def start_search_task(self, file):
+        self.worker = Worker(self.search_in_entries, self.entries, file)
+        self.worker.signal.result.connect(self.on_result)
+        self.worker.signal.error.connect(self.on_error)
+        self.worker.run()
+
+    def search_in_entries(self, entries, filename, progress_callback):
+        for id in entries:
+            save_name = entries[id]["name"] + "-" + entries[id]["artist"] + ".mp3"
+            save_name = re.sub('[\\/?:*"<>|]', '', save_name)
+            if filename == save_name:
+                return id, filename
+            print(save_name)
+        print("Failed:", filename)
+        raise Exception("No matching entry")
+
+    def on_result(self, res):
+        id = res[0]
+        name = res[1]
+        self.queue.append((id, name))
+        self.success_count += 1
+        self.on_update()
+
+    def on_error(self):
+        self.error_count += 1
+        self.on_update()
+
+    def on_update(self):
+        self.label.setText(
+            "Matched {success}/{total} files\nFailed to match: {fail} files".format(success=self.success_count,
+                                                                                    fail=self.error_count,
+                                                                                    total=self.total))
+        if self.success_count + self.error_count == self.total:
+            # self.label.setText("Writing changes...")
+            f = FileHelper("data.json")
+            entries = json.loads(f.read())
+            for entry in self.queue:
+                entries[entry[0]]["download-path"] = os.path.join(self.path, entry[1])
+            js = json.dumps(entries)
+            f.overwrite(js)
+
+            self.callback()
+            self.close()
+
+
 class BatchGetYtUrlPopup(QWidget):
     def __init__(self, threadpool):
         super(BatchGetYtUrlPopup, self).__init__()
@@ -253,9 +394,11 @@ class BatchGetYtUrlPopup(QWidget):
         self.f = FileHelper("data.json")
         tracks = json.loads(self.f.read())
         for track in tracks:
-            if "yt-url" not in tracks[track]:
-                self.total += 1
-                self.get_url_for_entry(track, tracks[track]["name"], tracks[track]["artist"])
+            if settings.reload()["skip_have_url"] and "yt-url" in tracks[track] and tracks[track]["yt-url"] != "":
+                continue
+            self.total += 1
+            self.get_url_for_entry(track, tracks[track]["name"], tracks[track]["artist"])
+
         if self.total == 0:
             self.total += 1
             self.on_finish()
@@ -269,7 +412,8 @@ class BatchGetYtUrlPopup(QWidget):
 
     def on_update(self):
         self.label.setText(
-            "Got {success}/{total} urls\nFailed: {fail}".format(success=self.success_count, total=self.total, fail=self.error_count))
+            "Got {success}/{total} urls\nFailed: {fail}".format(success=self.success_count, total=self.total,
+                                                                fail=self.error_count))
 
     def on_result(self, res):
         self.success_count += 1
@@ -293,7 +437,6 @@ class BatchGetYtUrlPopup(QWidget):
             self.finish_popup = GenericConfirmPopup("Get Youtube URLs", "Done", print)
             self.finish_popup.show()
             self.close()
-
 
 
 class GetYtUrlPopup(QWidget):
@@ -321,6 +464,7 @@ class GetYtUrlPopup(QWidget):
         self.id = id
         self.name = name
         self.keyword.setText(self.name)
+
     def on_click(self):
         self.loading_popup.show()
         self.worker = Worker(YoutubeHandler.get_url, self.id, self.keyword.text())
@@ -350,7 +494,7 @@ class GetYtUrlPopup(QWidget):
 
 
 class DownloadYtPopup(QWidget):
-    def __init__(self, url, name, id, path, callback, threadpool):
+    def __init__(self, url, name, id, path, callback1, callback2, threadpool):
         super(DownloadYtPopup, self).__init__()
 
         self.threadpool = threadpool
@@ -358,7 +502,8 @@ class DownloadYtPopup(QWidget):
         self.name = name
         self.id = id
         self.path = path
-        self.fn = callback
+        self.fn = callback1
+        self.fn2 = callback2
 
         self.setWindowTitle("Downloading music")
 
@@ -404,6 +549,7 @@ class DownloadYtPopup(QWidget):
             metadata.add_image_from_url(tracks[self.id]["album-image-url"])
         self.success_popup.show()
         self.fn()
+        self.fn2(self.id)
         self.close()
 
     def on_error(self, trace):
@@ -445,6 +591,8 @@ class BatchDownloadYtPopup(QWidget):
         f = FileHelper("data.json")
         tracks = json.loads(f.read())
         for track in tracks:
+            if settings.reload()["skip_downloaded"] and ("download-path" in tracks[track]) and tracks[track]["download-path"] != "":
+                continue
             if "yt-url" in tracks[track]:
                 self.total += 1
                 self.start_task(tracks[track]["yt-url"], tracks[track]["name"] + "-" + tracks[track]["artist"], track)
@@ -486,6 +634,7 @@ class BatchDownloadYtPopup(QWidget):
             self.finished_popup = GenericConfirmPopup("Download from Youtube", "Done", self.callback)
             self.finished_popup.show()
             self.close()
+
 
 class YtTitleRefreshPopup:
     def __init__(self, id, url, callback, threadpool):
@@ -591,7 +740,7 @@ class ImageChooserPopup(QWidget):
         tracks = json.loads(f.read())
 
         if "download-path" in tracks[self.id]:
-            path = QFileDialog.getOpenFileName(self, "Choose an image file")[0]
+            path = QFileDialog.getOpenFileName(self, "Choose an image file", filter="JPEG files (*.jpeg *.jpg)")[0]
             if path:
                 file_path = tracks[self.id]["download-path"]
                 MetadataHelper(file_path).add_image_from_file(path)
@@ -599,6 +748,101 @@ class ImageChooserPopup(QWidget):
         else:
             self.warning = GenericConfirmPopup("Error", "Song must be downloaded before adding image", print)
             self.warning.show()
+        self.close()
+
+
+class Mp3ChooserPopup(QWidget):
+    def __init__(self, callback, id):
+        super(Mp3ChooserPopup, self).__init__()
+
+        self.callback = callback
+        self.id = id
+
+        f = FileHelper("data.json")
+        tracks = json.loads(f.read())
+        path = QFileDialog.getOpenFileName(self, "Choose an mp3 file", filter="MP3 files (*.mp3)")[0]
+        if path:
+            tracks[self.id]["download-path"] = path
+            js = json.dumps(tracks)
+            f.overwrite(js)
+            self.callback(self.id)
+        self.close()
+
+
+# Settings Menu
+class SettingsMenu(QWidget):
+    def __init__(self):
+        super(SettingsMenu, self).__init__()
+
+        self.setMinimumWidth(600)
+
+        self.setWindowTitle("Settings")
+        self.setWindowModality(Qt.ApplicationModal)
+
+        self.view = QVBoxLayout()
+
+        self.settings_manager = settings
+        self.settings = self.settings_manager.settings
+
+        from copy import deepcopy
+        self.settings_fields = deepcopy(self.settings)  # A dictionary holding input field for each setting
+
+        for setting in self.settings:
+            setting_row = QHBoxLayout()
+            setting_label = QLabel(_("settings_" + setting))
+
+            setting_value = self.settings[setting]
+            input_field = QLineEdit()
+            if type(setting_value) is bool:
+                input_field = QCheckBox()
+                input_field.setChecked(setting_value)
+            else:
+                input_field.setMaximumWidth(50)
+                input_field.setText(str(setting_value))
+            self.settings_fields[setting] = input_field
+
+            setting_row.addWidget(setting_label)
+            setting_row.addStretch()
+            setting_row.addWidget(input_field)
+
+            self.view.addLayout(setting_row)
+
+        self.button_row = QHBoxLayout()
+        self.button_row.addStretch()
+
+        self.save_button = QPushButton("Save")
+        self.save_button.clicked.connect(self.on_save)
+        self.button_row.addWidget(self.save_button)
+
+        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.clicked.connect(self.close)
+        self.button_row.addWidget(self.cancel_button)
+
+        self.view.addLayout(self.button_row)
+
+        self.setLayout(self.view)
+
+    def on_save(self):
+        for field in self.settings_fields:
+            input_field = self.settings_fields[field]
+            if type(input_field) is QCheckBox:
+                self.settings[field] = input_field.isChecked()
+            else:
+                print(type(self.settings[field]))
+                if type(self.settings[field]) is int:
+                    try:
+                        self.settings[field] = int(input_field.text())
+                    except:
+                        self.error_popup = GenericConfirmPopup("Error",
+                                                               "{field} only accept integer".format(field=field),
+                                                               print, "Non int input was found")
+                        self.error_popup.show()
+                else:
+                    self.settings[field] = str(input_field.text())
+
+        self.notice = GenericConfirmPopup("Notice", "Some settings may require an application restart to be effective!", print, "Notice")
+        self.notice.show()
+        self.settings_manager.update()
         self.close()
 
 
@@ -663,9 +907,15 @@ class GenericConfirmPopup(QWidget):
         self.label.setWordWrap(True)
         self.view.addWidget(self.label)
 
+        self.button_row = QHBoxLayout()
+
         self.confirm = QPushButton("OK")
         self.confirm.clicked.connect(self.on_click)
-        self.view.addWidget(self.confirm)
+        self.button_row.addStretch()
+        self.button_row.addWidget(self.confirm)
+        self.button_row.addStretch()
+
+        self.view.addLayout(self.button_row)
 
         self.setLayout(self.view)
 

@@ -53,11 +53,11 @@ class DataManager:
             if id not in data_id:
                 delete_queue.append(id)
         for id in delete_queue:
-            if "download-path" in pre[id]:
-                p = pre[id]["download-path"]
-                pf = FileHelper(p)
-                if pf.exists():
-                    pf.delete()
+            # if "download-path" in pre[id]:
+            #     p = pre[id]["download-path"]
+            #     pf = FileHelper(p)
+            #     if pf.exists():
+            #         pf.delete()
             pre.pop(id)
         data.update(pre)
         js = json.dumps(data)

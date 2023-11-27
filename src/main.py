@@ -12,6 +12,9 @@ from FileHelper import *
 from ThreadWorker import *
 from MetadataHelper import *
 from DataManager import *
+from SettingsManager import *
+
+settings = SettingsManager().settings
 
 
 class MainWindow(QMainWindow):
@@ -19,7 +22,7 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.threadpool = QThreadPool()
-        self.threadpool.setMaxThreadCount(6)
+        self.threadpool.setMaxThreadCount(settings["thread_count"])
         print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
 
         self.MenuBar = MenuBar()
@@ -27,7 +30,7 @@ class MainWindow(QMainWindow):
         self.setMenuBar(self.MenuBar)
 
         self.setWindowTitle("Music Manager")
-        self.resize(1200, 800)
+        self.resize(1300, 800)
 
         main_layout = QHBoxLayout()
 
@@ -151,10 +154,21 @@ class InfoEditingPanel(QScrollArea):
 
         self.title_row = QHBoxLayout()
         self.yt_title = QLabel()
+        self.yt_title.setWordWrap(False)
         self.yt_title_refresh = QPushButton("Refresh")
         self.title_row.addWidget(self.yt_title)
+        self.title_row.addStretch()
         self.title_row.addWidget(self.yt_title_refresh)
-        self.view.addRow("Youtube Video Title", self.title_row)
+        self.view.addRow("Youtube Video Title:", self.title_row)
+
+        self.path_row = QHBoxLayout()
+        self.path_label = QLabel()
+        self.path_row.addWidget(self.path_label)
+        self.path_row.addStretch()
+        self.path_add_but = QPushButton("Choose")
+        self.path_row.addWidget(self.path_add_but)
+        self.view.addRow("File path:", self.path_row)
+
 
         self.button_row = QHBoxLayout()
         self.save_but = QPushButton("Save")
@@ -169,9 +183,10 @@ class InfoEditingPanel(QScrollArea):
         self.view.addRow(self.button_row)
 
         self.delete_but.clicked.connect(lambda: self.on_delete_click(self.callback))
-        self.download_but.clicked.connect(lambda: self.on_download_click(self.callback, self.threadpool))
+        self.download_but.clicked.connect(lambda: self.on_download_click(self.callback, self.populate, self.threadpool))
         self.yt_search_but.clicked.connect(lambda: self.on_search_click(self.populate, self.threadpool))
         self.yt_title_refresh.clicked.connect(lambda: self.on_refresh_click(self.populate, self.threadpool))
+        self.path_add_but.clicked.connect(lambda: self.on_add_path_click(self.populate, self.id))
 
     def save_for_later(self, callback, threadpool):
         self.callback = callback
@@ -188,6 +203,8 @@ class InfoEditingPanel(QScrollArea):
         self.name_edit.setText(tracks[id]["name"])
         self.artist_edit.setText(tracks[id]["artist"])
         self.album_edit.setText(tracks[id]["album"])
+        self.image.set_image_from_file("resources/placeholder.jpg")
+        self.path_label.setText("")
         if "yt-url" in tracks[id]:
             self.yt_link_edit.setText(tracks[id]["yt-url"])
             self.yt_link_edit.setCursorPosition(0)
@@ -196,22 +213,20 @@ class InfoEditingPanel(QScrollArea):
             self.yt_link_edit.setText("")
             self.yt_title.setText("")
         if "download-path" in tracks[id]:
+            self.path_label.setText(tracks[id]["download-path"])
             img_data = MetadataHelper(tracks[id]["download-path"]).get_album_image()
             if img_data is not None:
                 print("Loading image from local file")
                 self.image.set_image_from_data(img_data)
-            else:
-                print("No image data found. Using placeholder")
-                self.image.set_image_from_file("resources/placeholder.jpg")
         elif "album-image-url" in tracks[id] and tracks[id]["album-image-url"] != "":
             url = tracks[id]["album-image-url"]
             print("Fetching image via url", url)
-            http = urllib3.PoolManager()
-            resp = http.request("GET", url)
-            self.image.set_image_from_data(resp.data)
-        else:
-            print("No image data found. Using placeholder")
-            self.image.set_image_from_file("resources/placeholder.jpg")
+            try:
+                http = urllib3.PoolManager(timeout=urllib3.Timeout(connect=2.0, read=2.0))
+                resp = http.request("GET", url)
+                self.image.set_image_from_data(resp.data)
+            except Exception as e:
+                print(e)
 
     def on_image_click(self):
         self.image_chooser = ImageChooserPopup(self.populate, self.id)
@@ -248,10 +263,10 @@ class InfoEditingPanel(QScrollArea):
         DataManager().delete_entry(self.id)
         update_callback()
 
-    def on_download_click(self, fn, threadpool):
+    def on_download_click(self, refresh_list, refresh_view, threadpool):
         if self.yt_link_edit.text() != "":
             self.path_chooser.update_params(DownloadYtPopup,self.yt_link_edit.text(), self.name_edit.text(), self.id,
-                                            callback=fn, threadpool=threadpool)
+                                            callback1=refresh_list, callback2=refresh_view, threadpool=threadpool)
             self.path_chooser.show()
         else:
             self.error_popup = GenericConfirmPopup("Error", "No Youtube URL", print)
@@ -268,6 +283,9 @@ class InfoEditingPanel(QScrollArea):
         else:
             self.error_popup = GenericConfirmPopup("Error", "No Youtube URL", print)
             self.error_popup.show()
+
+    def on_add_path_click(self, callback, id):
+        self.mp3_choose = Mp3ChooserPopup(callback, id)
 
 
 class MenuBar(QMenuBar):
@@ -290,6 +308,12 @@ class MenuBar(QMenuBar):
         addMenu.addAction(self.action_add_yt_playlist)
         self.addMenu(fileMenu)
 
+        self.action_set_download_path = QAction("Match existing files...", fileMenu)
+        fileMenu.addAction(self.action_set_download_path)
+
+        self.action_open_settings = QAction("Settings...", fileMenu)
+        fileMenu.addAction(self.action_open_settings)
+
         editMenu = QMenu("Action", self)
         self.action_refresh = QAction("Refresh", editMenu)
         editMenu.addAction(self.action_refresh)
@@ -306,10 +330,13 @@ class MenuBar(QMenuBar):
         self.action_import_spotify.triggered.connect(lambda: self.open_import_spotify_popup(fn, threadpool))
         self.action_add_sp_playlist.triggered.connect(lambda: self.open_add_sp_playlist(fn, threadpool))
         self.action_add_yt.triggered.connect(lambda: self.open_add_yt(fn, threadpool))
+        self.action_add_yt_playlist.triggered.connect(lambda: self.open_add_yt_playlist(fn, threadpool))
         self.action_batch_get_yt_link.triggered.connect(lambda: self.open_batch_get_yt_url_popup(threadpool))
         self.action_batch_download_yt.triggered.connect(lambda: self.open_batch_download_yt_popup(fn, threadpool))
         self.action_batch_write_metadata.triggered.connect(lambda: self.open_batch_write_metadata_popup(threadpool))
         self.action_refresh.triggered.connect(lambda: self.on_refresh(fn))
+        self.action_set_download_path.triggered.connect(lambda: self.open_set_dl_path(fn, threadpool))
+        self.action_open_settings.triggered.connect(self.open_settings)
 
     def on_refresh(self, fn):
         DataManager().update().validate_download()
@@ -327,6 +354,17 @@ class MenuBar(QMenuBar):
         self.add_yt_popup = AddYtVideoPopup(fn, threadpool)
         self.add_yt_popup.show()
 
+    def open_add_yt_playlist(self, fn, threadpool):
+        self.add_yt_playlist_popup = AddYtPlaylistPopup(fn, threadpool)
+        self.add_yt_playlist_popup.show()
+    def open_set_dl_path(self, fn, threadpool):
+        self.choose_path_popup = GenericPathChooser("Choose a folder contains existing files", "Choose path")
+        self.choose_path_popup.update_params(SetExistingPath, callback=fn, threadpool=threadpool)
+        self.choose_path_popup.show()
+
+    def open_settings(self):
+        self.settings_menu = SettingsMenu()
+        self.settings_menu.show()
     def open_batch_get_yt_url_popup(self, threadpool):
         self.batch_get_yt_url_popup = BatchGetYtUrlPopup(threadpool)
         self.batch_get_yt_url_popup.show()
