@@ -153,18 +153,17 @@ class InfoEditingPanel(QScrollArea):
         self.view.addRow("Youtube Link", self.yt_link_row)
 
         self.title_row = QHBoxLayout()
-        self.yt_title = QLabel()
-        self.yt_title.setWordWrap(False)
+        self.yt_title = ScrollableLabel()
         self.yt_title_refresh = QPushButton("Refresh")
         self.title_row.addWidget(self.yt_title)
-        self.title_row.addStretch()
+        # self.title_row.addStretch()
         self.title_row.addWidget(self.yt_title_refresh)
         self.view.addRow("Youtube Video Title:", self.title_row)
 
         self.path_row = QHBoxLayout()
-        self.path_label = QLabel()
+        self.path_label = ScrollableLabel()
         self.path_row.addWidget(self.path_label)
-        self.path_row.addStretch()
+        # self.path_row.addStretch()
         self.path_add_but = QPushButton("Choose")
         self.path_row.addWidget(self.path_add_but)
         self.view.addRow("File path:", self.path_row)
@@ -209,11 +208,13 @@ class InfoEditingPanel(QScrollArea):
             self.yt_link_edit.setText(tracks[id]["yt-url"])
             self.yt_link_edit.setCursorPosition(0)
             self.yt_title.setText(tracks[id]["yt-title"])
+            self.yt_title.setCursorPosition(0)
         else:
             self.yt_link_edit.setText("")
             self.yt_title.setText("")
         if "download-path" in tracks[id]:
             self.path_label.setText(tracks[id]["download-path"])
+            self.path_label.setCursorPosition(0)
             img_data = MetadataHelper(tracks[id]["download-path"]).get_album_image()
             if img_data is not None:
                 print("Loading image from local file")
@@ -450,6 +451,13 @@ class ImageLabel(QLabel):
         self.pixmap = self.pixmap.scaled(128, 128, Qt.KeepAspectRatio)
         self.setPixmap(self.pixmap)
 
+
+class ScrollableLabel(QLineEdit):
+    def __init__(self):
+        super(ScrollableLabel, self).__init__()
+
+        self.setReadOnly(True)
+        self.setStyleSheet("background-color:#00000000; font-size: 13px; border:0px")
 
 class Signal(QObject):
     clicked = pyqtSignal()

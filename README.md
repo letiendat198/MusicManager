@@ -20,7 +20,7 @@ A convenient app to download and edit metadata for Spotify tracks and Youtube vi
 ## How to build
 - Install the dependencies in `requirements.txt` with `python3 -m pip install -r requirements.txt`
 - Run `pyinstaller main.spec`
-### Note: After building is complete, please move the `resources` folder from `dist` to root
+### Note: After building is completed, please move the `resources` folder from `dist` to root
 
 ## TODO
 <details>
@@ -69,10 +69,10 @@ Just handle dynamic stuffs in a seperate function. Somehow only affected Downloa
 - ~~Song with same name will overlap when download~~ (File name now come with artist)
 - ~~Delete button (Also other buttons too but less obvious) firing n times when used n times~~ (Again, do not write
 .connect() somewhere it will be called multiple times)
-- DataManager may take 2 update first time to generate working data.json
+- ~~DataManager may take 2 update first time to generate working data.json~~
 </details>
 
-- Batch get url won't close automatically
+- Batch get url may not close automatically
 - A few things will crash randomly cause I can't squash all bugs (TODO: Add a logging system)
 - Sometimes batch operations will fail with no apparent cause (More threads more fails, just retry or lower thread count in settings)
 - Will add when remember

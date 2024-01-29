@@ -20,6 +20,8 @@ class MetadataHelper:
         print("Adding image to file via url", url)
         http = urllib3.PoolManager()
         resp = http.request("GET", url)
+        for image in self.track.tag.images:
+            self.track.tag.images.remove(image.description)
         self.track.tag.images.set(type_=3, img_data=resp.data, mime_type="image/jpeg")
         self.track.tag.save()
 
@@ -27,6 +29,8 @@ class MetadataHelper:
         print("Adding image from file in", path)
         f = FileHelper(path)
         img_data = f.read_bytes()
+        for image in self.track.tag.images:
+            self.track.tag.images.remove(image.description)
         self.track.tag.images.set(type_=3, img_data=img_data, mime_type="image/jpeg")
         self.track.tag.save()
 
