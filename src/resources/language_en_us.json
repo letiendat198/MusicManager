@@ -1,5 +1,0 @@
-{
-  "settings_thread_count": "Number of thread:",
-  "settings_skip_downloaded": "Skip downloaded songs when doing a batch download",
-  "settings_skip_have_url": "Skip songs that already have url when doing a batch get url"
-}

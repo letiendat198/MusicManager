@@ -1,0 +1,21 @@
+from abc import ABC, abstractmethod
+
+class Presenter(ABC):
+    def __init__(self, view):
+        self.view = view
+
+        self.view.event_signal.ready.connect(self.on_view_ready)
+        self.view.event_signal.result.connect(self.on_view_result)
+        self.view.event_signal.reject.connect(self.on_view_reject)
+
+    @abstractmethod
+    def on_view_ready(self):
+        pass
+
+    @abstractmethod
+    def on_view_result(self, data):
+        pass
+
+    @abstractmethod
+    def on_view_reject(self):
+        pass
