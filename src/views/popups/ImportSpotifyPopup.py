@@ -2,7 +2,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 
-import src.common.ThreadPool
+import src.thread_manager.ThreadManager
 from src.presenters.popups.ImportSpotifyPopupPresenter import ImportSpotifyPopupPresenter
 from src.views.popups.CredentialsPopup import *
 from src.utils.Signals import EventSignal
@@ -10,6 +10,7 @@ from src.utils.Signals import EventSignal
 import logging
 
 logger = logging.getLogger(__name__)
+logger.setLevel(level=logging.DEBUG)
 
 class ImportSpotifyPopup(QProgressDialog):
     # QProgressDialog init code have an internal show call => Will show up without being called
@@ -44,8 +45,8 @@ class ImportSpotifyPopup(QProgressDialog):
     def on_result(self, secret):
         logger.debug("Credentials result")
         self.event_signal.result.emit(secret)
-        self.initUI()
         self.exec_()
+        self.initUI()
     def on_reject(self):
         logger.debug("Credentials reject")
         self.event_signal.reject.emit()
@@ -63,7 +64,14 @@ class ImportSpotifyPopup(QProgressDialog):
         self.setValue(value)
         self.setLabelText(text)
 
-    def on_command_close(self):
+    def on_command_close(self, data):
         self.close()
+        if data is not None:
+            text_popup = QMessageBox(self)
+            text_popup.setText("Imported {} songs from Spotify's Liked Songs".format(str(data)))
+            text_popup.setWindowTitle("Result")
+            text_popup.setDefaultButton(QMessageBox.Ok)
+            text_popup.exec()
+
 
 

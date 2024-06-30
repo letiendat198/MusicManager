@@ -6,17 +6,15 @@ from PyQt5.QtWidgets import QMainWindow, QHBoxLayout, QWidget, QApplication
 from src.views.InfoView import InfoEditingPanel
 from src.views.MusicListView import MusicListView
 from src.views.components.MenuBar import MenuBar
-# from src.views.popups.Popups import *
+import src.thread_manager.ThreadManager
+import src.cache_manager.CacheManager
 
-from src.utils.DataManager import *
-from src.utils.SettingsManager import *
-
-logging.basicConfig(level=logging.NOTSET)
+logging.basicConfig(level=logging.INFO)
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.MenuBar = MenuBar()
+        self.MenuBar = MenuBar(self)
         self.setMenuBar(self.MenuBar)
 
         self.setWindowTitle("Music Manager")
@@ -24,13 +22,13 @@ class MainWindow(QMainWindow):
 
         main_layout = QHBoxLayout()
 
-        self.side_media_list = MusicListView()
-        self.info_editing_panel = InfoEditingPanel()
+        self.side_media_list = MusicListView(self)
+        self.info_editing_panel = InfoEditingPanel(self)
 
         main_layout.addWidget(self.side_media_list, 45)
         main_layout.addWidget(self.info_editing_panel, 65)
 
-        main_widget = QWidget()
+        main_widget = QWidget(self)
         main_widget.setLayout(main_layout)
 
         self.setCentralWidget(main_widget)

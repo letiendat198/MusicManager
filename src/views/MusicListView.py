@@ -8,12 +8,11 @@ from src.utils.Signals import EventSignal
 
 class MusicListView(QScrollArea):
     # Init self components first, then initiate other modules
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent=None):
+        super().__init__(parent)
         self.event_signal = EventSignal()
 
         self.presenter = MusicListViewPresenter(self)
-
         self.presenter.control_signal.update.connect(self.on_update)
 
         self.initUI()
@@ -23,16 +22,17 @@ class MusicListView(QScrollArea):
         self.setWidgetResizable(True)
         # self.setFixedWidth(200)
 
-        self.view = QVBoxLayout()
+        self.view = QVBoxLayout(self)
         self.view.setAlignment(Qt.AlignTop)
+        self.view.setSpacing(0)
 
-        self.default_label = QLabel("Nothing yet!")
+        self.default_label = QLabel("Nothing yet!", parent=self)
         self.view.addWidget(self.default_label)
 
-        self.music_entry_group = MusicEntryGroup()
+        self.music_entry_group = MusicEntryGroup(self)
         self.view.addWidget(self.music_entry_group)
 
-        self.widget = QWidget()
+        self.widget = QWidget(self)
         self.widget.setLayout(self.view)
         self.setWidget(self.widget)
 
@@ -40,9 +40,17 @@ class MusicListView(QScrollArea):
 
     def on_update(self, data):
         self.default_label.hide()
+        id = data["id"]
+        name = data["name"]
+        artist = data["artist"]
+        mode = data["mode"]
+        img = data["img"]
 
-        for entries in data:
-            self.music_entry = MusicEntry(entries, data[entries]["name"], data[entries]["img_data"], data[entries]["artist"])
-            self.music_entry_group.add(entries, self.music_entry)
+        if id in self.music_entry_group:
+            music_entry = self.music_entry_group.get(id)
+            music_entry.update_all(name, artist, mode, img)
+        else:
+            music_entry = MusicEntry(id, name, artist, mode, img=img, parent=self)
+            self.music_entry_group.add(id, music_entry)
 
-            self.view.addWidget(self.music_entry)
+        self.view.addWidget(music_entry)

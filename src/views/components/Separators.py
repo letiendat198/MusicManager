@@ -3,14 +3,14 @@ from PyQt5.QtWidgets import QFrame, QHBoxLayout, QLabel
 
 
 class HLine(QFrame):
-    def __init__(self):
-        super(HLine, self).__init__()
+    def __init__(self, parent=None):
+        super(HLine, self).__init__(parent)
         self.setFrameShape(QFrame.HLine)
         self.setFrameShadow(QFrame.Sunken)
 
 class PlaylistSeperator(QHBoxLayout):
-    def __init__(self, name):
-        super(PlaylistSeperator, self).__init__()
+    def __init__(self, name, parent=None):
+        super(PlaylistSeperator, self).__init__(parent)
 
         self.line = HLine()
 

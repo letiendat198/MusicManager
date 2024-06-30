@@ -68,7 +68,13 @@ process too)
     - Add a search bar
     - Use collapsible playlists to categorize songs
     - Add options to show songs by playlists or album or by name
-  - Still a lot of work to do
+  - ~~Rework ThreadWorker~~
+  - ~~Rework Database~~
+  - ~~Standardize a lot of stuffs~~
+  - Rethink how to do cache. The current implementation is temporary to avoid getting blocked by Spotify
+  - Implement a mediator to talk between presenters (Not sure if it's a good idea, but it's clean)
+
+
 - Allow importing a standalone audio file
 - Add soundcloud ??
 - Add Apple Music import through HTML (Cause I ain't paying 99$/year unless someone fund me)
@@ -88,6 +94,8 @@ Just handle dynamic stuffs in a seperate function. Somehow only affected Downloa
 - ~~Delete button (Also other buttons too but less obvious) firing n times when used n times~~ (Again, do not write
 .connect() somewhere it will be called multiple times)
 - ~~DataManager may take 2 update first time to generate working data.json~~
+- ~~QObject unexpectedly get garbage collected~~ (QObject needs a parent to not get GC.
+Remember kids, QObject not QOrphan)
 </details>
 
 - Write metadata is blocking GUI

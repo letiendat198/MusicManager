@@ -6,8 +6,8 @@ from src.views.popups.ImportSpotifyPopup import ImportSpotifyPopup
 
 
 class MenuBar(QMenuBar):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent=None):
+        super().__init__(parent)
 
         fileMenu = QMenu("File", self)
         importMenu = fileMenu.addMenu("Import")

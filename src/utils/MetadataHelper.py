@@ -16,7 +16,7 @@ class MetadataHelper:
 
         self.track.tag.save()
 
-    def add_image_from_url(self, url, progress_callback=None):
+    def add_image_from_url(self, url, progress_callback=None): # Very bad. Should not let networking code be this low-level
         print("Adding image to file via url", url)
         http = urllib3.PoolManager()
         resp = http.request("GET", url)

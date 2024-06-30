@@ -1,10 +1,15 @@
 import spotipy
 import re
+import os
 import logging
 from spotipy.oauth2 import SpotifyOAuth
-from src.utils.DatabaseHelper import DatabaseHelper
+from src.utils.DatabaseHelper import DatabaseHelper, TrackObj
+
+import src.cache_manager.CacheManager as CacheManager
+
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 class SpotifyHandler:
     def __init__(self, client_id, client_secret):
         self.client_id = client_id
@@ -19,7 +24,7 @@ class SpotifyHandler:
         count = 0
         remain = True
 
-        tracks = {}
+        tracks = []
         while remain:
             remain = False
             res = self.sp.current_user_saved_tracks(offset=count)
@@ -32,35 +37,30 @@ class SpotifyHandler:
                 artists = ", ".join([artist["name"] for artist in track["artists"]])
                 track_number = track["track_number"]
                 name = track['name']
+                album = track["album"]["name"]
+                album_img_url = track["album"]["images"][0]["url"]
 
-                track_dict = {
-                    track["id"]: {
-                        "name": name,
-                        "artist": artists,
-                        "album": track["album"]["name"],
-                        "album_artist": album_artist,
-                        "track_number": track_number,
-                        "album-image-url": track["album"]["images"][0]["url"],
-                        "source": "Spotify",
-                    }
-                }
-                tracks.update(track_dict)
-            break
+
+                track_obj = TrackObj(
+                    song_id= track["id"],
+                    song_name= name,
+                    song_artists= artists,
+                    album_name = album,
+                    album_artists=album_artist,
+                    track_order=track_number,
+                    album_img_url=album_img_url
+                )
+                tracks.append(track_obj)
+            if count>100: break
 
         db = DatabaseHelper()
-        db.init_database()
-        for id in tracks:
-            if len(db.filter_row("playlists", "name", "Liked Songs").get_output())==0:
-                logger.debug("Adding Playlist")
-                db.add_playlist("Liked Songs")
-            if len(db.filter_row("albums", "name", tracks[id]["album"]).get_output())==0:
-                logger.debug("Adding Albums")
-                db.add_album(tracks[id]["album"], tracks[id]["album_artist"], img_url=tracks[id]["album-image-url"])
-            local_id = db.add_song(tracks[id]["name"], tracks[id]["artist"], tracks[id]["album"], "Liked Songs", track_order=tracks[id]["track_number"])
-            db.add_id(local_id, "Spotify", id)
+        db.add_songs_to_db(tracks, "Liked Songs")
 
-        db.commit()
-        db.close()
+        for track in tracks:
+            sanitized_file_name = re.sub('[\\/?:*"<>|]', '', track.album_name)
+            file_name = sanitized_file_name + ".jpg"
+            cache_path = CacheManager.get_manager_instance().cache_image_from_url(track.album_img_url, file_name)
+            db.update_row("albums", "album_name", track.album_name, "img_path", cache_path)
 
     def get_playlist_track(self, playlist_id, progress_callback):
         count = 0
@@ -93,10 +93,11 @@ class SpotifyHandler:
                         "name": name,
                         "artist": artist,
                         "album": track["album"]["name"],
-                        "album-image-url": track["album"]["images"][0]["url"],
+                        "album_img_url": track["album"]["images"][0]["url"],
                         "source": "Spotify",
                     }
                 }
                 obj.update(track_dict)
                 print(obj)
+
 

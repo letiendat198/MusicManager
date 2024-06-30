@@ -4,7 +4,7 @@ from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 from src.services.SpotifyHandler import *
 
-from src.utils.ThreadWorker import Worker
+from src.thread_manager.ThreadWorker import Worker
 from src.utils.DataManager import *
 from src.utils.MetadataHelper import *
 from src.utils.SettingsManager import *
