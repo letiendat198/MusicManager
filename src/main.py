@@ -3,10 +3,11 @@ import logging
 
 from PyQt5.QtWidgets import QMainWindow, QHBoxLayout, QWidget, QApplication
 
-from src.views.InfoView import InfoEditingPanel
+from src.mediators.InfoViewMediator import InfoViewMediator
+from src.views.InfoView import InfoView
 from src.views.MusicListView import MusicListView
 from src.views.components.MenuBar import MenuBar
-import src.thread_manager.ThreadManager
+import src.thread_manager.ThreadManager as ThreadManager
 import src.cache_manager.CacheManager
 
 logging.basicConfig(level=logging.INFO)
@@ -14,6 +15,7 @@ logging.basicConfig(level=logging.INFO)
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+
         self.MenuBar = MenuBar(self)
         self.setMenuBar(self.MenuBar)
 
@@ -22,11 +24,13 @@ class MainWindow(QMainWindow):
 
         main_layout = QHBoxLayout()
 
-        self.side_media_list = MusicListView(self)
-        self.info_editing_panel = InfoEditingPanel(self)
+        self.music_list_view = MusicListView(self)
+        self.info_view = InfoView(self)
 
-        main_layout.addWidget(self.side_media_list, 45)
-        main_layout.addWidget(self.info_editing_panel, 65)
+        self.mediator = InfoViewMediator(self.music_list_view.presenter, self.info_view.presenter)
+
+        main_layout.addWidget(self.music_list_view, 45)
+        main_layout.addWidget(self.info_view, 65)
 
         main_widget = QWidget(self)
         main_widget.setLayout(main_layout)

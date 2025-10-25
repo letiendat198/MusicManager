@@ -48,7 +48,8 @@ class SpotifyHandler:
                     album_name = album,
                     album_artists=album_artist,
                     track_order=track_number,
-                    album_img_url=album_img_url
+                    album_img_url=album_img_url,
+                    platform = "Spotify"
                 )
                 tracks.append(track_obj)
             if count>100: break
@@ -56,11 +57,6 @@ class SpotifyHandler:
         db = DatabaseHelper()
         db.add_songs_to_db(tracks, "Liked Songs")
 
-        for track in tracks:
-            sanitized_file_name = re.sub('[\\/?:*"<>|]', '', track.album_name)
-            file_name = sanitized_file_name + ".jpg"
-            cache_path = CacheManager.get_manager_instance().cache_image_from_url(track.album_img_url, file_name)
-            db.update_row("albums", "album_name", track.album_name, "img_path", cache_path)
 
     def get_playlist_track(self, playlist_id, progress_callback):
         count = 0

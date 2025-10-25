@@ -27,10 +27,10 @@ class ClickableImageLabel(ImageLabel):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.signal = EventSignal()
+        self.event_signal = EventSignal()
 
     def mousePressEvent(self, ev, QMouseEvent=None):
-        self.signal.clicked.emit()
+        self.event_signal.clicked.emit()
 
 
 class ScrollableLabel(QLineEdit):

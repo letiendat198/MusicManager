@@ -38,10 +38,6 @@ class DatabaseHelper:
 
     def init_database(self):
         self.cur.execute("PRAGMA foreign_keys = ON;")
-        # self.cur.execute("DROP TABLE IF EXISTS ids")
-        # self.cur.execute("DROP TABLE IF EXISTS songs")
-        # self.cur.execute("DROP TABLE IF EXISTS playlists")
-        # self.cur.execute("DROP TABLE IF EXISTS albums")
 
         self.cur.execute("""CREATE TABLE IF NOT EXISTS songs(
             platform_id TEXT PRIMARY KEY, 
@@ -50,13 +46,21 @@ class DatabaseHelper:
             album, 
             track_order,  
             platform,
-            ismn,
+            isrc,
             FOREIGN KEY (album) REFERENCES albums(album_name)
             )""")
         self.cur.execute("CREATE TABLE IF NOT EXISTS albums(album_name PRIMARY KEY, album_artist, year, genre, img_url, img_path)")
         self.cur.execute("""CREATE TABLE IF NOT EXISTS playlists(
             playlist_id INTEGER PRIMARY KEY AUTOINCREMENT, 
             playlist_name
+            )""")
+        self.cur.execute("""CREATE TABLE IF NOT EXISTS platforms(
+            initial_platform_id,
+            guest_platform_name,
+            guest_platform_id,
+            guest_platform_link,
+            guest_platform_specific_name,
+            FOREIGN KEY (initial_platform_id) REFERENCES songs(platform_id)
             )""")
 
     def add_song(self, id: str, name: str, artist: str, album: str, platform: str, track_order: int=None, ismn: str=None):
@@ -79,6 +83,10 @@ class DatabaseHelper:
         data = (name, artist, year, genre, img_url, img_path)
         self.cur.execute("INSERT INTO albums VALUES (?,?,?,?,?,?)", data)
 
+    def add_platform_for_id(self, initial_id: str, platform_name: str, platform_id: str = None, platform_link: str = None, platform_specific_name: str = None):
+        data = (initial_id, platform_name, platform_id, platform_link, platform_specific_name)
+        self.cur.execute("INSERT INTO platforms VALUES (?,?,?,?,?)", data)
+
     def add_song_to_playlist(self, playlist_id: int, song_id: str):
         playlist_table = "playlist" + str(playlist_id)
         self.cur.execute("INSERT INTO {} VALUES (?)".format(playlist_table), (song_id,))
@@ -92,6 +100,12 @@ class DatabaseHelper:
     def filter_row(self, table: str, column: str, condition: str) -> Self:
         self.cur.execute("SELECT * FROM {} WHERE {}=?".format(table, column), (condition,))
         return self
+
+    def get_inf_by_id(self, platform_id: str) -> sqlite3.Row:
+        self.cur.execute("""SELECT * FROM songs
+                            INNER JOIN albums ON songs.album=albums.album_name
+                            WHERE platform_id=?""", (platform_id,))
+        return self.cur.fetchone()
 
     def get_all_from_table(self, table: str) -> List[sqlite3.Row]:
         self.cur.execute("SELECT * FROM {}".format(table))

@@ -11,7 +11,7 @@ logger.setLevel(logging.DEBUG)
 
 class Worker(QObject):
     def __init__(self, parent, fn, *args, **kwargs):
-        super(Worker, self).__init__()
+        super(Worker, self).__init__(parent)
 
         self.fn = fn
         self.args = args

@@ -5,5 +5,7 @@
 build
 dist
 venv
+cache
+src/cache
 src/downloaded
 src/__pycache__

@@ -52,5 +52,9 @@ class MusicListView(QScrollArea):
         else:
             music_entry = MusicEntry(id, name, artist, mode, img=img, parent=self)
             self.music_entry_group.add(id, music_entry)
+            music_entry.event_signal.clicked.connect(self.on_music_entry_clicked)
 
         self.view.addWidget(music_entry)
+
+    def on_music_entry_clicked(self, id):
+        self.event_signal.clicked.emit(id)

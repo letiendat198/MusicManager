@@ -5,6 +5,8 @@ from src.thread_manager.ThreadWorker import Worker
 
 import logging
 
+from src.utils.Signals import WorkerSignal
+
 logger = logging.getLogger(__name__)
 logger.setLevel(level=logging.DEBUG)
 class _ThreadManager(QObject): # Not meant to be inited anywhere else
@@ -36,18 +38,18 @@ class _ThreadManager(QObject): # Not meant to be inited anywhere else
             return
 
         # Add thread to the managed threadpool
-        self.thread = QThread(self) # Need to be self or have a parent to survive
-        self.threadpool[id] = self.thread
+        thread = QThread(self) # Need to be self or have a parent to survive
+        self.threadpool[id] = thread
 
-        self.worker = self.worker_queue[id]
+        worker = self.worker_queue[id]
         self.worker_queue.pop(id)
         
-        self.worker.moveToThread(self.thread)
-        self.worker.info_signal.finished.connect(self.thread.quit)
-        self.thread.finished.connect(lambda: self.on_thread_finished(id))
-        self.thread.started.connect(self.worker.run)
+        worker.moveToThread(thread)
+        worker.info_signal.finished.connect(thread.quit)
+        thread.finished.connect(lambda: self.on_thread_finished(id))
+        thread.started.connect(worker.run)
 
-        self.thread.start()
+        thread.start()
         logger.debug("Starting a thread for task id: %d", id)
 
 
@@ -66,7 +68,7 @@ class _ThreadManager(QObject): # Not meant to be inited anywhere else
             logger.debug("Starting a queued thread with id: %d", queued_id)
             self.start_task(queued_id)
 
-    def get_worker_signal(self, id):
+    def get_worker_signal(self, id) -> WorkerSignal:
         return self.worker_queue[id].info_signal
 
     def on_thread_finished(self, id):

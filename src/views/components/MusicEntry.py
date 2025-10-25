@@ -22,7 +22,7 @@ class MusicEntry(QWidget):
         self.img_label = ImageLabel()
         self.update_image(mode, img)
 
-        self.signal = EventSignal()
+        self.event_signal = EventSignal()
 
         self.initUI()
 
@@ -36,7 +36,7 @@ class MusicEntry(QWidget):
         self.music_info.setSpacing(0)
 
         self.title_label = QLabel(self.name)
-        self.title_label.setStyleSheet("font-weight: bold")
+        self.title_label.setStyleSheet("font-weight: bold; font-size:14px")
 
         self.artist_label = QLabel(self.artist)
 
@@ -63,13 +63,13 @@ class MusicEntry(QWidget):
             self.img_label.set_image_from_file(img)
         self.img_label.set_scale(48, 48)
 
-    def update_all(self, name, artist, mode, img): # TODO: BUGGY
+    def update_all(self, name, artist, mode, img): # TODO: BUGGY - NO TITLE SHORTENING
         self.title_label.setText(name)
         self.artist_label.setText(artist)
         self.update_image(mode, img)
 
     def mousePressEvent(self, ev, QMouseEvent=None):
-        self.signal.clicked.emit(self.id)
+        self.event_signal.clicked.emit(self.id)
         
 class MusicEntryGroup(QWidget):
     def __init__(self, parent=None):
@@ -88,7 +88,7 @@ class MusicEntryGroup(QWidget):
     def add(self, id, obj):
         logger.debug(id)
         self.collection[id] = obj
-        obj.signal.clicked.connect(self.on_entry_click)
+        obj.event_signal.clicked.connect(self.on_entry_click)
 
     def get(self, id):
         return self.collection[id]

@@ -53,5 +53,5 @@ class CredentialsPopup(QDialog):
         self.event_signal.result.emit(cred)
     def on_reject(self):
         logger.debug("Rejected")
-        self.event_signal.reject.emit()
+        self.event_signal.reject.emit("")
         self.close()

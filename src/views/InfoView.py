@@ -2,133 +2,106 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 
-class InfoEditingPanel(QScrollArea):
+from src.utils.DatabaseHelper import TrackObj
+from src.utils.Signals import EventSignal
+from src.presenters.InfoViewPresenter import InfoViewPresenter
+from src.views.components.Separators import HLine
+from src.views.components.SpecialLabels import ClickableImageLabel, ScrollableLabel
+
+
+class InfoView(QScrollArea):
     def __init__(self, parent=None):
         super().__init__(parent)
+
+        self.event_signal = EventSignal()
+
+        self.presenter = InfoViewPresenter(self)
+        self.presenter.control_signal.update.connect(self.populate)
+
+        self.initUI()
+
+    def initUI(self):
 
         self.setWidgetResizable(True)
 
         self.view = QFormLayout()
 
-        self.default_off = False
-        self.default_label = QLabel("No info to show")
-        self.view.addWidget(self.default_label)
+        # self.path_chooser = GenericPathChooser("Choose a folder to save", "Save path")
+        # self.search_popup = GetYtUrlPopup()
+
+        self.image_row = QHBoxLayout()
+        self.image = ClickableImageLabel()
+        self.image.set_image_from_file("resources/placeholder.jpg")
+        # self.image.event_signal.clicked.connect(self.on_image_click)
+
+        self.info_side = QFormLayout()
+        self.name_edit = QLineEdit()
+        self.info_side.addRow("Track name", self.name_edit)
+        self.artist_edit = QLineEdit()
+        self.info_side.addRow("Artist", self.artist_edit)
+        self.album_edit = QLineEdit()
+        self.info_side.addRow("Album", self.album_edit)
+        self.image_row.addWidget(self.image)
+        self.image_row.addLayout(self.info_side)
+
+        self.view.addRow(self.image_row)
+
+        self.view.addRow(HLine())
+
+        self.yt_link_row = QHBoxLayout()
+        self.yt_link_edit = QLineEdit()
+        self.yt_search_but = QPushButton("Search")
+        self.yt_link_row.addWidget(self.yt_link_edit)
+        self.yt_link_row.addWidget(self.yt_search_but)
+        self.view.addRow("Youtube Link", self.yt_link_row)
+
+        self.title_row = QHBoxLayout()
+        self.yt_title = ScrollableLabel()
+        self.yt_title_refresh = QPushButton("Refresh")
+        self.title_row.addWidget(self.yt_title)
+        # self.title_row.addStretch()
+        self.title_row.addWidget(self.yt_title_refresh)
+        self.view.addRow("Youtube Video Title:", self.title_row)
+
+        self.path_row = QHBoxLayout()
+        self.path_label = ScrollableLabel()
+        self.path_row.addWidget(self.path_label)
+        # self.path_row.addStretch()
+        self.path_add_but = QPushButton("Choose")
+        self.path_row.addWidget(self.path_add_but)
+        self.view.addRow("File path:", self.path_row)
+
+
+        self.button_row = QHBoxLayout()
+        self.save_but = QPushButton("Save")
+        self.button_row.addWidget(self.save_but)
+        self.download_but = QPushButton("Download")
+        self.button_row.addWidget(self.download_but)
+        self.delete_but = QPushButton("Delete")
+        self.button_row.addWidget(self.delete_but)
+
+        # self.save_but.clicked.connect(self.on_save_click)
+
+        self.view.addRow(self.button_row)
 
         self.widget = QWidget()
         self.widget.setLayout(self.view)
         self.setWidget(self.widget)
 
-        # self.path_chooser = GenericPathChooser("Choose a folder to save", "Save path")
-        # self.search_popup = GetYtUrlPopup()
+        # self.delete_but.clicked.connect(lambda: self.on_delete_click(self.callback))
+        # self.download_but.clicked.connect(lambda: self.on_download_click(self.callback, self.populate, self.threadpool))
+        # self.yt_search_but.clicked.connect(lambda: self.on_search_click(self.populate, self.threadpool))
+        # self.yt_title_refresh.clicked.connect(lambda: self.on_refresh_click(self.populate, self.threadpool))
+        # self.path_add_but.clicked.connect(lambda: self.on_add_path_click(self.populate, self.id))
 
-    # def switch_off_default(self):
-    #     self.default_off = True
-    #
-    #     self.default_label.hide()
-    #
-    #     self.image_row = QHBoxLayout()
-    #     self.image = ImageLabel()
-    #     self.image.set_image_from_file("resources/placeholder.jpg")
-    #     self.image.signal.clicked.connect(self.on_image_click)
-    #
-    #     self.info_side = QFormLayout()
-    #     self.name_edit = QLineEdit()
-    #     self.info_side.addRow("Track name", self.name_edit)
-    #     self.artist_edit = QLineEdit()
-    #     self.info_side.addRow("Artist", self.artist_edit)
-    #     self.album_edit = QLineEdit()
-    #     self.info_side.addRow("Album", self.album_edit)
-    #     self.image_row.addWidget(self.image)
-    #     self.image_row.addLayout(self.info_side)
-    #
-    #     self.view.addRow(self.image_row)
-    #
-    #     self.view.addRow(HLine())
-    #
-    #     self.yt_link_row = QHBoxLayout()
-    #     self.yt_link_edit = QLineEdit()
-    #     self.yt_search_but = QPushButton("Search")
-    #     self.yt_link_row.addWidget(self.yt_link_edit)
-    #     self.yt_link_row.addWidget(self.yt_search_but)
-    #     self.view.addRow("Youtube Link", self.yt_link_row)
-    #
-    #     self.title_row = QHBoxLayout()
-    #     self.yt_title = ScrollableLabel()
-    #     self.yt_title_refresh = QPushButton("Refresh")
-    #     self.title_row.addWidget(self.yt_title)
-    #     # self.title_row.addStretch()
-    #     self.title_row.addWidget(self.yt_title_refresh)
-    #     self.view.addRow("Youtube Video Title:", self.title_row)
-    #
-    #     self.path_row = QHBoxLayout()
-    #     self.path_label = ScrollableLabel()
-    #     self.path_row.addWidget(self.path_label)
-    #     # self.path_row.addStretch()
-    #     self.path_add_but = QPushButton("Choose")
-    #     self.path_row.addWidget(self.path_add_but)
-    #     self.view.addRow("File path:", self.path_row)
-    #
-    #
-    #     self.button_row = QHBoxLayout()
-    #     self.save_but = QPushButton("Save")
-    #     self.button_row.addWidget(self.save_but)
-    #     self.download_but = QPushButton("Download")
-    #     self.button_row.addWidget(self.download_but)
-    #     self.delete_but = QPushButton("Delete")
-    #     self.button_row.addWidget(self.delete_but)
-    #
-    #     self.save_but.clicked.connect(self.on_save_click)
-    #
-    #     self.view.addRow(self.button_row)
-    #
-    #     self.delete_but.clicked.connect(lambda: self.on_delete_click(self.callback))
-    #     self.download_but.clicked.connect(lambda: self.on_download_click(self.callback, self.populate, self.threadpool))
-    #     self.yt_search_but.clicked.connect(lambda: self.on_search_click(self.populate, self.threadpool))
-    #     self.yt_title_refresh.clicked.connect(lambda: self.on_refresh_click(self.populate, self.threadpool))
-    #     self.path_add_but.clicked.connect(lambda: self.on_add_path_click(self.populate, self.id))
-    #
-    # def save_for_later(self, callback, threadpool):
-    #     self.callback = callback
-    #     self.threadpool = threadpool
-    #
-    # def populate(self, id):
-    #     print(id)
-    #     self.id = id
-    #     if not self.default_off:
-    #         self.switch_off_default()
-    #
-    #     f = FileHelper("data.json")
-    #     tracks = json.loads(f.read())
-    #     self.name_edit.setText(tracks[id]["name"])
-    #     self.artist_edit.setText(tracks[id]["artist"])
-    #     self.album_edit.setText(tracks[id]["album"])
-    #     self.image.set_image_from_file("resources/placeholder.jpg")
-    #     self.path_label.setText("")
-    #     if "yt-url" in tracks[id]:
-    #         self.yt_link_edit.setText(tracks[id]["yt-url"])
-    #         self.yt_link_edit.setCursorPosition(0)
-    #         self.yt_title.setText(tracks[id]["yt-title"])
-    #         self.yt_title.setCursorPosition(0)
-    #     else:
-    #         self.yt_link_edit.setText("")
-    #         self.yt_title.setText("")
-    #     if "download-path" in tracks[id]:
-    #         self.path_label.setText(tracks[id]["download-path"])
-    #         self.path_label.setCursorPosition(0)
-    #         img_data = MetadataHelper(tracks[id]["download-path"]).get_album_image()
-    #         if img_data is not None:
-    #             print("Loading image from local file")
-    #             self.image.set_image_from_data(img_data)
-    #     elif "album-image-url" in tracks[id] and tracks[id]["album-image-url"] != "":
-    #         url = tracks[id]["album-image-url"]
-    #         print("Fetching image via url", url)
-    #         try:
-    #             http = urllib3.PoolManager(timeout=urllib3.Timeout(connect=2.0, read=2.0))
-    #             resp = http.request("GET", url)
-    #             self.image.set_image_from_data(resp.data)
-    #         except Exception as e:
-    #             print(e)
-    #
+
+    def populate(self, track_obj: TrackObj):
+        self.name_edit.setText(track_obj.song_name)
+        self.artist_edit.setText(track_obj.song_artists)
+        self.album_edit.setText(track_obj.album_name)
+        self.image.set_image_from_file(track_obj.album_img_path)
+
+
     # def on_image_click(self):
     #     self.image_chooser = ImageChooserPopup(self.populate, self.id)
     #
