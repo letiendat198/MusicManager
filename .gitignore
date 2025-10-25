@@ -5,4 +5,7 @@ build
 dist
 venv
 src/downloaded
+src/cache
+database.db
+Download
 src/__pycache__

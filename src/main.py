@@ -215,10 +215,16 @@ class InfoEditingPanel(QScrollArea):
         if "download-path" in tracks[id]:
             self.path_label.setText(tracks[id]["download-path"])
             self.path_label.setCursorPosition(0)
-            img_data = MetadataHelper(tracks[id]["download-path"]).get_album_image()
-            if img_data is not None:
-                print("Loading image from local file")
-                self.image.set_image_from_data(img_data)
+            try:
+                img_data = MetadataHelper(tracks[id]["download-path"]).get_album_image()
+                if img_data is not None:
+                    print("Loading image from local file")
+                    self.image.set_image_from_data(img_data)
+            except Exception as e:
+                print("Download file not found for this track! Removing path info")
+                del tracks[id]["download-path"]
+                js = json.dumps(tracks)
+                f.overwrite(js)
         elif "album-image-url" in tracks[id] and tracks[id]["album-image-url"] != "":
             url = tracks[id]["album-image-url"]
             print("Fetching image via url", url)
